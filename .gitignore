@@ -1,0 +1,63 @@
+# =============================================================================
+# AI Workspace — .gitignore
+# =============================================================================
+
+# ── Environment ──────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Node / Nuxt ──────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.nuxt/
+.nitro/
+.output/
+.cache/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+*.whl
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Rust ─────────────────────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Data / Uploads ───────────────────────────────────────────────────────────
+uploads/
+data/
+*.sqlite3

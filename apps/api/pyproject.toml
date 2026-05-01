@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-workspace-api"
+version = "0.1.0"
+description = "AI Workspace — FastAPI Backend"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.8.0",
+    "langchain>=1.2.0",
+    "langchain-openai>=0.4.0",
+    "langchain-community>=0.4.0",
+    "qdrant-client>=1.14.0",
+    "sqlalchemy[asyncio]>=2.0.40",
+    "asyncpg>=0.30.0",
+    "alembic>=1.15.0",
+    "redis>=6.0.0",
+    "taskiq>=0.11.0",
+    "taskiq-redis>=1.0.0",
+    "python-multipart>=0.0.20",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+    "ruff>=0.11.0",
+    "mypy>=1.15.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

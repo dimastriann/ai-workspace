@@ -1,0 +1,14 @@
+[package]
+name = "ai-workspace-parser"
+version = "0.1.0"
+edition = "2024"
+description = "High-performance document parsing microservice for AI Workspace"
+
+[dependencies]
+actix-web = "4"
+actix-cors = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+env_logger = "0.11"
+log = "0.4"
