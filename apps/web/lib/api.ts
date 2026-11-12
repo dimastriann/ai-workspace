@@ -63,10 +63,12 @@ export async function proxyWithCookies(
   init: RequestInit = {},
 ): Promise<Response> {
   const cookie = request.headers.get("cookie");
+  const contentType = request.headers.get("content-type");
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
     headers: {
+      ...(contentType ? { "content-type": contentType } : {}),
       ...init.headers,
       ...(cookie ? { cookie } : {}),
     },
