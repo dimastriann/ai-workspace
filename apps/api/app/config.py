@@ -48,10 +48,22 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
 
+    # ── Authentication ───────────────────────────────────────────────────
+    session_cookie_name: str = "ai_workspace_session"
+    session_ttl_hours: int = 24 * 7
+    session_cookie_secure: bool = False
+    admin_email: str = ""
+    admin_password: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Parse comma-separated CORS origins into a list."""
         return [origin.strip() for origin in self.cors_origins.split(",")]
+
+    @property
+    def secure_cookies(self) -> bool:
+        """Cookies are always secure in production."""
+        return self.session_cookie_secure or self.app_env == "production"
 
 
 # Singleton instance

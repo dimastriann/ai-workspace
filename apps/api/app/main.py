@@ -5,6 +5,7 @@ Configures the application with CORS, lifespan events,
 and router registration.
 """
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -12,7 +13,31 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import agent, chat, documents, rag, workspaces
+from app.core.database import async_session
+from app.models.enums import Role
+from app.routers import agent, auth, chat, documents, rag, workspaces
+from app.services.auth_service import auth_service
+
+logger = logging.getLogger(__name__)
+
+
+async def bootstrap_admin() -> None:
+    """Create the initial admin user when configured and absent."""
+    if not settings.admin_email or not settings.admin_password:
+        return
+
+    async with async_session() as db:
+        existing = await auth_service.get_user_by_email(settings.admin_email, db)
+        if existing is not None:
+            return
+
+        await auth_service.create_user(
+            email=settings.admin_email,
+            password=settings.admin_password,
+            role=Role.ADMIN,
+            db=db,
+        )
+        logger.info("Bootstrap admin user created")
 
 
 @asynccontextmanager
@@ -22,13 +47,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     Runs setup on startup and cleanup on shutdown.
     Database connections, Redis pools, and vector store
-    clients will be initialized here in Phase 2.
+    clients will be initialized here in later phases.
     """
     # ── Startup ──────────────────────────────────────────────────────
-    print(f"🚀 AI Workspace API starting in {settings.app_env} mode")
+    logger.info("AI Workspace API starting in %s mode", settings.app_env)
+    try:
+        await bootstrap_admin()
+    except Exception:
+        logger.exception("Failed to bootstrap the admin user")
     yield
     # ── Shutdown ─────────────────────────────────────────────────────
-    print("👋 AI Workspace API shutting down")
+    logger.info("AI Workspace API shutting down")
 
 
 app = FastAPI(
@@ -48,6 +77,7 @@ app.add_middleware(
 )
 
 # ── Routers ──────────────────────────────────────────────────────────────
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
