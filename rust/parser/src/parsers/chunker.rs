@@ -43,6 +43,10 @@ pub fn split_text(text: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Te
             char_count,
         });
 
+        if end == total_chars {
+            break;
+        }
+
         start += step;
         index += 1;
     }
