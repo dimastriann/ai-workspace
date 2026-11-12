@@ -1,0 +1,15 @@
+.git
+.github
+docs-local
+
+**/node_modules
+**/.next
+**/.nuxt
+**/.output
+**/dist
+**/target
+**/__pycache__
+**/.venv
+**/*.log
+
+apps/api/uploads
