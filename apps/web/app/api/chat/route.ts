@@ -5,10 +5,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const body = await request.text();
+  const cookie = request.headers.get("cookie");
 
   const upstream = await apiFetch("/api/chat/stream", {
     method: "POST",
     body,
+    headers: cookie ? { cookie } : {},
   });
 
   if (!upstream.ok || !upstream.body) {

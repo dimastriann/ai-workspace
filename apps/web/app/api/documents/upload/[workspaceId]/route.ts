@@ -1,4 +1,4 @@
-import { proxyForm } from "@/lib/api";
+import { proxyFormWithCookies } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -8,5 +8,9 @@ export async function POST(
 ) {
   const { workspaceId } = await context.params;
   const formData = await request.formData();
-  return proxyForm(`/api/documents/upload/${encodeURIComponent(workspaceId)}`, formData);
+  return proxyFormWithCookies(
+    `/api/documents/upload/${encodeURIComponent(workspaceId)}`,
+    request,
+    formData,
+  );
 }

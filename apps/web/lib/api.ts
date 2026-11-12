@@ -57,6 +57,31 @@ export async function proxyForm(path: string, formData: FormData): Promise<Respo
   });
 }
 
+export async function proxyFormWithCookies(
+  path: string,
+  request: Request,
+  formData: FormData,
+): Promise<Response> {
+  const cookie = request.headers.get("cookie");
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+    headers: cookie ? { cookie } : {},
+  });
+
+  const body = await response.text();
+  const headers = new Headers({
+    "content-type": response.headers.get("content-type") ?? "application/json",
+  });
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) {
+    headers.set("set-cookie", setCookie);
+  }
+
+  return new Response(body, { status: response.status, headers });
+}
+
 export async function proxyWithCookies(
   path: string,
   request: Request,
