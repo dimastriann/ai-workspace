@@ -11,10 +11,10 @@ pub fn extract_text(content: &str) -> String {
     content
         .lines()
         .map(|line| {
-            line.trim_start_matches('#')  // Strip heading markers
-                .trim_start_matches('>')  // Strip blockquotes
-                .trim_start_matches('-')  // Strip list markers
-                .trim_start_matches('*')  // Strip bold/italic/list
+            line.trim_start_matches('#') // Strip heading markers
+                .trim_start_matches('>') // Strip blockquotes
+                .trim_start_matches('-') // Strip list markers
+                .trim_start_matches('*') // Strip bold/italic/list
                 .trim()
         })
         .collect::<Vec<&str>>()

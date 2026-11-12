@@ -14,6 +14,12 @@ pub fn extract_text(content: &str) -> String {
     // - Handle multi-page documents
     // - Preserve reading order
 
-    log::info!("PDF parser called (stub) — content length: {} bytes", content.len());
-    format!("[PDF content placeholder — {} bytes received]", content.len())
+    log::info!(
+        "PDF parser called (stub) — content length: {} bytes",
+        content.len()
+    );
+    format!(
+        "[PDF content placeholder — {} bytes received]",
+        content.len()
+    )
 }
