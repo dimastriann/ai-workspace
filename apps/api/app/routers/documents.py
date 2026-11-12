@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
+from app.dependencies import require_member, require_viewer
+from app.models.database import User
 from app.models.document import DocumentMetadata, DocumentUploadResponse
 from app.services.document_service import document_service
 from app.services.document_types import detect_document_type
@@ -23,6 +25,7 @@ async def upload_document(
     workspace_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_member),
 ):
     """
     Upload a document to a specific workspace.
@@ -43,7 +46,9 @@ async def upload_document(
 
 @router.get("/{workspace_id}", response_model=list[DocumentMetadata])
 async def list_documents(
-    workspace_id: UUID, db: AsyncSession = Depends(get_db_session)
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_viewer),
 ):
     """List all documents in a workspace."""
     docs = await document_service.get_workspace_documents(workspace_id, db)

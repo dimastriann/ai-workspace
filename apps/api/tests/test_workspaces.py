@@ -9,7 +9,7 @@ from app.models.database import Document, Workspace
 
 
 async def test_list_workspaces_with_documents(
-    auth_client: AsyncClient, db_session: AsyncSession
+    member_client: AsyncClient, db_session: AsyncSession
 ) -> None:
     workspace = Workspace(id=uuid.uuid4(), name="Test Workspace")
     db_session.add(workspace)
@@ -28,12 +28,12 @@ async def test_list_workspaces_with_documents(
     )
     await db_session.commit()
 
-    listed = await auth_client.get("/api/workspaces/")
+    listed = await member_client.get("/api/workspaces/")
 
     assert listed.status_code == 200
     assert listed.json()[0]["document_count"] == 1
 
-    detail = await auth_client.get(f"/api/workspaces/{workspace.id}")
+    detail = await member_client.get(f"/api/workspaces/{workspace.id}")
 
     assert detail.status_code == 200
     assert detail.json()["document_count"] == 1

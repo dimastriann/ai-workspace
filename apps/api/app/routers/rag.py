@@ -6,17 +6,20 @@ searching uploaded documents for relevant context
 before generating answers.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.dependencies import require_member
+from app.models.database import User
 
 router = APIRouter()
 
 
 @router.post("/query")
-async def rag_query() -> dict:
+async def rag_query(_user: User = Depends(require_member)) -> dict:
     """
     Submit a RAG query against uploaded documents.
 
-    TODO (Phase 2): Implement embedding → retrieval → augmentation → generation.
+    TODO: Replace the stub with retrieval → augmentation → generation.
     """
     return {
         "status": "stub",

@@ -12,16 +12,16 @@ from app.models.database import Document, Workspace
 
 
 @pytest.mark.asyncio
-async def test_list_documents_rejects_invalid_workspace_id(client: AsyncClient):
+async def test_list_documents_rejects_invalid_workspace_id(member_client: AsyncClient):
     """The workspace id path parameter must be a UUID."""
-    response = await client.get("/api/documents/not-a-uuid")
+    response = await member_client.get("/api/documents/not-a-uuid")
 
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_list_documents_normalizes_legacy_type(
-    auth_client: AsyncClient, db_session: AsyncSession
+    member_client: AsyncClient, db_session: AsyncSession
 ):
     """Legacy rows with a raw extension still serialize as a valid type."""
     workspace_id = uuid.uuid4()
@@ -41,7 +41,7 @@ async def test_list_documents_normalizes_legacy_type(
     )
     await db_session.commit()
 
-    response = await auth_client.get(f"/api/documents/{workspace_id}")
+    response = await member_client.get(f"/api/documents/{workspace_id}")
 
     assert response.status_code == 200
     assert response.json()[0]["document_type"] == "markdown"

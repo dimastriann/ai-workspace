@@ -12,7 +12,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
+from app.dependencies import require_member
 from app.models.chat import ChatMessageRequest
+from app.models.database import User
 from app.services.chat_service import chat_service
 
 router = APIRouter()
@@ -20,7 +22,9 @@ router = APIRouter()
 
 @router.post("/stream")
 async def chat_stream(
-    request: ChatMessageRequest, db: AsyncSession = Depends(get_db_session)
+    request: ChatMessageRequest,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_member),
 ):
     """
     Streaming chat endpoint.

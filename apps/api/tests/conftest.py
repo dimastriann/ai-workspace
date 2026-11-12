@@ -15,6 +15,12 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import get_db_session
 from app.main import app
 from app.models.database import Base
+from app.models.enums import Role
+from app.services.auth_service import auth_service
+
+MEMBER_EMAIL = "member@example.com"
+VIEWER_EMAIL = "viewer@example.com"
+TEST_PASSWORD = "password123"
 
 
 @pytest.fixture
@@ -57,3 +63,31 @@ async def auth_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+async def _create_and_login(
+    client: AsyncClient, db_session: AsyncSession, email: str, role: Role
+) -> None:
+    await auth_service.create_user(
+        email=email, password=TEST_PASSWORD, role=role, db=db_session
+    )
+    response = await client.post(
+        "/api/auth/login", json={"email": email, "password": TEST_PASSWORD}
+    )
+    assert response.status_code == 200
+
+
+@pytest_asyncio.fixture
+async def member_client(
+    auth_client: AsyncClient, db_session: AsyncSession
+) -> AsyncGenerator[AsyncClient]:
+    await _create_and_login(auth_client, db_session, MEMBER_EMAIL, Role.MEMBER)
+    yield auth_client
+
+
+@pytest_asyncio.fixture
+async def viewer_client(
+    auth_client: AsyncClient, db_session: AsyncSession
+) -> AsyncGenerator[AsyncClient]:
+    await _create_and_login(auth_client, db_session, VIEWER_EMAIL, Role.VIEWER)
+    yield auth_client
