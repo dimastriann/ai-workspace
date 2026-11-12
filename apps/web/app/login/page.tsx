@@ -9,7 +9,7 @@ import { useLogin, useMe } from "@/lib/queries/auth";
 import styles from "./page.module.css";
 
 function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+  if (!value?.startsWith("/") || value.startsWith("//")) {
     return "/";
   }
   return value;

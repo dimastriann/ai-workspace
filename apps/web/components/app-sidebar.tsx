@@ -69,6 +69,37 @@ const navItems: NavItem[] = [
   },
 ];
 
+const settingsNav: NavItem = {
+  path: "/settings",
+  label: "Settings",
+  icon: (
+    <svg {...iconProps} aria-hidden="true">
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </svg>
+  ),
+};
+
+const usersNav: NavItem = {
+  path: "/users",
+  label: "Users",
+  icon: (
+    <svg {...iconProps} aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+};
+
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -85,11 +116,12 @@ export function AppSidebar() {
   }, [currentWorkspaceId, workspaces, setWorkspace]);
 
   const currentWorkspace = workspaces?.find((workspace) => workspace.id === currentWorkspaceId);
+  const items = user?.role === "admin" ? [...navItems, settingsNav, usersNav] : navItems;
 
   return (
     <aside className={`${styles.sidebar} glass`}>
       <nav className={styles.nav}>
-        {navItems.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.path}
             href={item.path}
