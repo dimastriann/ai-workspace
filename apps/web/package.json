@@ -6,6 +6,8 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
+    "lint": "biome check .",
+    "format": "biome format --write .",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },

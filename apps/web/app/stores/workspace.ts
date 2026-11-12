@@ -1,47 +1,47 @@
-import { defineStore } from 'pinia'
+import { defineStore } from "pinia";
 
-export const useWorkspaceStore = defineStore('workspace', () => {
-  const workspaces = ref<any[]>([])
-  const currentWorkspaceId = ref<string | null>(null)
-  const isLoading = ref(false)
+export const useWorkspaceStore = defineStore("workspace", () => {
+  const workspaces = ref<any[]>([]);
+  const currentWorkspaceId = ref<string | null>(null);
+  const isLoading = ref(false);
 
-  const currentWorkspace = computed(() => 
-    workspaces.value.find(ws => ws.id === currentWorkspaceId.value) || null
-  )
+  const currentWorkspace = computed(
+    () => workspaces.value.find((ws) => ws.id === currentWorkspaceId.value) || null,
+  );
 
   async function fetchWorkspaces() {
-    isLoading.value = true
+    isLoading.value = true;
     try {
-      const { data } = await useFetch('/api/workspaces')
+      const { data } = await useFetch("/api/workspaces");
       if (data.value) {
-        workspaces.value = data.value as any[]
+        workspaces.value = data.value as any[];
         // Auto-select first workspace if none selected
         if (!currentWorkspaceId.value && workspaces.value.length > 0) {
-          currentWorkspaceId.value = workspaces.value[0].id
+          currentWorkspaceId.value = workspaces.value[0].id;
         }
       }
     } finally {
-      isLoading.value = false
+      isLoading.value = false;
     }
   }
 
-  async function createWorkspace(name: string, description: string = '') {
+  async function createWorkspace(name: string, description: string = "") {
     try {
-      const { data, error } = await useFetch('/api/workspaces', {
-        method: 'POST',
-        body: { name, description }
-      })
+      const { data, error } = await useFetch("/api/workspaces", {
+        method: "POST",
+        body: { name, description },
+      });
       if (data.value) {
-        await fetchWorkspaces()
-        currentWorkspaceId.value = (data.value as any).id
+        await fetchWorkspaces();
+        currentWorkspaceId.value = (data.value as any).id;
       }
     } catch (err) {
-      console.error('Failed to create workspace', err)
+      console.error("Failed to create workspace", err);
     }
   }
 
   function setWorkspace(id: string) {
-    currentWorkspaceId.value = id
+    currentWorkspaceId.value = id;
   }
 
   return {
@@ -51,6 +51,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     isLoading,
     fetchWorkspaces,
     createWorkspace,
-    setWorkspace
-  }
-})
+    setWorkspace,
+  };
+});

@@ -1,0 +1,31 @@
+pre-commit:
+  parallel: true
+  commands:
+    api-lint:
+      root: "apps/api/"
+      glob: "apps/api/**/*.py"
+      run: uv run ruff check --fix .
+    api-format:
+      root: "apps/api/"
+      glob: "apps/api/**/*.py"
+      run: uv run ruff format .
+    web-lint:
+      glob: "apps/web/**/*.{ts,tsx,js,jsx,json,css}"
+      run: pnpm exec biome check --write apps/web
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
+
+pre-push:
+  parallel: true
+  commands:
+    api-types:
+      root: "apps/api/"
+      run: uv run mypy .
+    api-tests:
+      root: "apps/api/"
+      run: uv run pytest -q
+    web-build:
+      run: pnpm --filter web build
