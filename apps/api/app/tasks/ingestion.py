@@ -1,22 +1,21 @@
 """
 AI Workspace API — Document Ingestion Handler
 
-Parses an uploaded document, embeds its chunks, and indexes them.
-Run by the Postgres-backed worker.
+Parses an uploaded document locally, chunks it, and stores the chunks
+in Postgres. No embeddings or vector database are required.
 """
 
-import os
+import asyncio
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-import httpx
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.core.vector_store import get_collection_name, qdrant_client
-from app.models.database import Document
-from app.services.embedding_service import embedding_service
+from app.models.database import Document, DocumentChunk
+from app.services.chunking import chunk_text
+from app.services.parsing import extract_text
 
 
 async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
@@ -25,72 +24,37 @@ async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
     workspace_id = UUID(str(payload["workspace_id"]))
     file_path = str(payload["file_path"])
 
-    try:
-        chunks = await _parse(file_path)
-        await _index(workspace_id, document_id, chunks)
+    document = await db.get(Document, document_id)
+    if document is None:
+        raise ValueError(f"Document not found: {document_id}")
 
-        document = await db.get(Document, document_id)
-        if document is not None:
-            document.status = "completed"
-            document.chunk_count = len(chunks)
-            await db.commit()
+    try:
+        data = await asyncio.to_thread(Path(file_path).read_bytes)
+        text = await asyncio.to_thread(extract_text, document.filename, data)
+        chunks = chunk_text(text)
+
+        await db.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+        )
+        db.add_all(
+            [
+                DocumentChunk(
+                    document_id=document_id,
+                    workspace_id=workspace_id,
+                    ordinal=index,
+                    content=chunk,
+                )
+                for index, chunk in enumerate(chunks)
+            ]
+        )
+
+        document.status = "completed"
+        document.chunk_count = len(chunks)
+        await db.commit()
     except Exception:
-        document = await db.get(Document, document_id)
-        if document is not None:
-            document.status = "error"
+        await db.rollback()
+        failed = await db.get(Document, document_id)
+        if failed is not None:
+            failed.status = "error"
             await db.commit()
         raise
-
-
-async def _parse(file_path: str) -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        with open(file_path, "rb") as handle:
-            files = {"file": (os.path.basename(file_path), handle)}
-            response = await client.post(
-                f"{settings.parser_service_url}/parse", files=files
-            )
-
-    if response.status_code != 200:
-        raise RuntimeError(f"Parser returned {response.status_code}")
-
-    chunks: list[dict[str, Any]] = response.json().get("chunks", [])
-    if not chunks:
-        raise RuntimeError("Parser returned no chunks")
-    return chunks
-
-
-async def _index(
-    workspace_id: UUID,
-    document_id: UUID,
-    chunks: list[dict[str, Any]],
-) -> None:
-    embeddings = await embedding_service.embed_documents(
-        [chunk["content"] for chunk in chunks]
-    )
-    collection_name = get_collection_name(str(workspace_id))
-
-    collections = qdrant_client.get_collections().collections
-    if not any(collection.name == collection_name for collection in collections):
-        qdrant_client.create_collection(
-            collection_name=collection_name,
-            vectors_config=VectorParams(
-                size=settings.embedding_dimension, distance=Distance.COSINE
-            ),
-        )
-
-    points = [
-        PointStruct(
-            id=str(chunk["id"]),
-            vector=embeddings[index],
-            payload={
-                "document_id": str(document_id),
-                "workspace_id": str(workspace_id),
-                "content": chunk["content"],
-                "chunk_index": chunk["chunk_index"],
-                "metadata": chunk.get("metadata", {}),
-            },
-        )
-        for index, chunk in enumerate(chunks)
-    ]
-
-    qdrant_client.upsert(collection_name=collection_name, points=points)
