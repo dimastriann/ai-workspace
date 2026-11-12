@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Document
-from app.tasks.ingestion import process_document
+from app.services.job_service import job_service
 
 
 class DocumentService:
@@ -60,8 +60,14 @@ class DocumentService:
         await db.commit()
 
         # 3. Trigger background task
-        await process_document.kiq(
-            document_id=document_id, workspace_id=workspace_id, file_path=file_path
+        await job_service.enqueue(
+            db,
+            kind="document.ingest",
+            payload={
+                "document_id": str(document_id),
+                "workspace_id": str(workspace_id),
+                "file_path": file_path,
+            },
         )
 
         return db_doc

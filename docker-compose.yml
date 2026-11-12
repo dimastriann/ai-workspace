@@ -28,12 +28,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+    volumes:
+      - ./apps/api:/app
+      - api_uploads:/app/uploads
+
+  # ── Background Worker (Postgres job queue) ───────────────────────────────
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    command: ["uv", "run", "python", "-m", "app.tasks.worker"]
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
         condition: service_healthy
-      qdrant:
-        condition: service_started
-      parser:
-        condition: service_started
     volumes:
       - ./apps/api:/app
       - api_uploads:/app/uploads
@@ -65,9 +75,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis ────────────────────────────────────────────────────────────────
+  # ── Redis (optional cache) ───────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    profiles: ["optional"]
     ports:
       - "6379:6379"
     volumes:

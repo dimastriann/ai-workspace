@@ -1,60 +1,76 @@
 """
-AI Workspace API — Ingestion Tasks
+AI Workspace API — Document Ingestion Handler
 
-Taskiq workers for processing uploaded documents:
-1. Call Rust parser to extract and chunk text.
-2. Generate embeddings for chunks.
-3. Upsert into Qdrant vector database.
-4. Update document metadata in PostgreSQL.
+Parses an uploaded document, embeds its chunks, and indexes them.
+Run by the Postgres-backed worker.
 """
 
+import os
+from typing import Any
 from uuid import UUID
 
 import httpx
 from qdrant_client.models import Distance, PointStruct, VectorParams
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.vector_store import get_collection_name, qdrant_client
 from app.models.database import Document
 from app.services.embedding_service import embedding_service
-from app.tasks.broker import broker
 
 
-@broker.task
-async def process_document(
-    document_id: UUID, workspace_id: UUID, file_path: str
-) -> bool:
-    """
-    Background task to process an uploaded document.
-    """
-    # ── 1. Call Rust Parser ──────────────────────────────────────────────────
+async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
+    """Handle a document ingestion job."""
+    document_id = UUID(str(payload["document_id"]))
+    workspace_id = UUID(str(payload["workspace_id"]))
+    file_path = str(payload["file_path"])
+
+    try:
+        chunks = await _parse(file_path)
+        await _index(workspace_id, document_id, chunks)
+
+        document = await db.get(Document, document_id)
+        if document is not None:
+            document.status = "completed"
+            document.chunk_count = len(chunks)
+            await db.commit()
+    except Exception:
+        document = await db.get(Document, document_id)
+        if document is not None:
+            document.status = "error"
+            await db.commit()
+        raise
+
+
+async def _parse(file_path: str) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=30.0) as client:
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.split("/")[-1], f)}
+        with open(file_path, "rb") as handle:
+            files = {"file": (os.path.basename(file_path), handle)}
             response = await client.post(
                 f"{settings.parser_service_url}/parse", files=files
             )
 
     if response.status_code != 200:
-        # Update status to error in DB (manual session management in task)
-        return False
+        raise RuntimeError(f"Parser returned {response.status_code}")
 
-    parsed_data = response.json()
-    chunks = parsed_data.get("chunks", [])
-
+    chunks: list[dict[str, Any]] = response.json().get("chunks", [])
     if not chunks:
-        return False
+        raise RuntimeError("Parser returned no chunks")
+    return chunks
 
-    # ── 2. Generate Embeddings ───────────────────────────────────────────────
-    chunk_texts = [c["content"] for c in chunks]
-    embeddings = await embedding_service.embed_documents(chunk_texts)
 
-    # ── 3. Initialize Qdrant Collection ───────────────────────────────────────
+async def _index(
+    workspace_id: UUID,
+    document_id: UUID,
+    chunks: list[dict[str, Any]],
+) -> None:
+    embeddings = await embedding_service.embed_documents(
+        [chunk["content"] for chunk in chunks]
+    )
     collection_name = get_collection_name(str(workspace_id))
 
-    # Check if collection exists, if not create it
     collections = qdrant_client.get_collections().collections
-    if not any(c.name == collection_name for c in collections):
+    if not any(collection.name == collection_name for collection in collections):
         qdrant_client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(
@@ -62,38 +78,19 @@ async def process_document(
             ),
         )
 
-    # ── 4. Upsert to Qdrant ──────────────────────────────────────────────────
     points = [
         PointStruct(
-            id=str(chunks[i]["id"]),
-            vector=embeddings[i],
+            id=str(chunk["id"]),
+            vector=embeddings[index],
             payload={
                 "document_id": str(document_id),
                 "workspace_id": str(workspace_id),
-                "content": chunks[i]["content"],
-                "chunk_index": chunks[i]["chunk_index"],
-                "metadata": chunks[i].get("metadata", {}),
+                "content": chunk["content"],
+                "chunk_index": chunk["chunk_index"],
+                "metadata": chunk.get("metadata", {}),
             },
         )
-        for i in range(len(chunks))
+        for index, chunk in enumerate(chunks)
     ]
 
     qdrant_client.upsert(collection_name=collection_name, points=points)
-
-    # ── 5. Update PostgreSQL ─────────────────────────────────────────────────
-    # Since we're in a background task, we open a fresh session
-    from app.core.database import async_session
-
-    async with async_session() as session:
-        from sqlalchemy import select
-
-        result = await session.execute(
-            select(Document).where(Document.id == document_id)
-        )
-        db_doc = result.scalar_one_or_none()
-        if db_doc:
-            db_doc.status = "completed"
-            db_doc.chunk_count = len(chunks)
-            await session.commit()
-
-    return True

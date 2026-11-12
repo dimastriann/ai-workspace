@@ -216,3 +216,31 @@ class AuditLog(Base):
     ip: Mapped[str | None] = mapped_column(String(45))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class Job(Base):
+    """
+    Durable background job, claimed with FOR UPDATE SKIP LOCKED.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
+    )
+
+    attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(default=3, nullable=False)
+
+    run_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    locked_by: Mapped[str | None] = mapped_column(String(100))
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )

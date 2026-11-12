@@ -109,9 +109,9 @@ This project is designed to demonstrate production-level engineering skills usin
 
 ### Systems
 
-- PostgreSQL (metadata storage)
-- Redis (caching + queues)
-- Celery / RQ (background jobs)
+- PostgreSQL (metadata storage + job queue)
+- Redis (optional cache/rate limiting)
+- Background worker using `FOR UPDATE SKIP LOCKED`
 
 ### Performance Layer
 
