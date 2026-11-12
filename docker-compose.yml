@@ -29,7 +29,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./apps/api:/app
       - api_uploads:/app/uploads
 
   # ── Background Worker (Postgres job queue) ───────────────────────────────
@@ -37,7 +36,7 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-    command: ["uv", "run", "python", "-m", "app.tasks.worker"]
+    command: ["python", "-m", "app.tasks.worker"]
     env_file:
       - path: .env
         required: false
@@ -45,14 +44,14 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./apps/api:/app
       - api_uploads:/app/uploads
 
-  # ── Rust Parser Service ──────────────────────────────────────────────────
+  # ── Rust Parser Service (optional accelerator) ───────────────────────────
   parser:
     build:
       context: ./rust/parser
       dockerfile: Dockerfile
+    profiles: ["optional"]
     ports:
       - "8080:8080"
     environment:
@@ -89,9 +88,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Qdrant (Vector Database) ─────────────────────────────────────────────
+  # ── Qdrant (optional semantic retrieval) ─────────────────────────────────
   qdrant:
     image: qdrant/qdrant:latest
+    profiles: ["optional"]
     ports:
       - "6333:6333"   # REST API
       - "6334:6334"   # gRPC

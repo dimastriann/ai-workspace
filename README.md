@@ -103,16 +103,16 @@ This project is designed to demonstrate production-level engineering skills usin
 
 ### AI / Data
 
-- OpenAI API or local LLMs
-- Embeddings (OpenAI / Sentence Transformers)
-- Vector DB: FAISS / Pinecone / Weaviate
+- OpenAI API or local LLMs (generation)
+- **Default retrieval: PostgreSQL full-text search** (no embeddings required)
+- Optional semantic retrieval: Qdrant / embeddings
+- Document chunking is deterministic and AI-free
 
 ### Systems
 
 - PostgreSQL (metadata storage + job queue)
 - Redis (optional cache/rate limiting)
 - Background worker using `FOR UPDATE SKIP LOCKED`
-
 ### Performance Layer
 
 - Rust microservice

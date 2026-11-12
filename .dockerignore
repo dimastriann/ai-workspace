@@ -9,6 +9,10 @@ docs-local
 **/target
 **/__pycache__
 **/.venv
+**/.venv/**
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
 **/*.log
 
 apps/api/uploads

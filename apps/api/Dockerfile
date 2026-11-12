@@ -26,8 +26,11 @@ RUN uv sync --no-dev --no-install-project
 # Copy application code
 COPY . .
 
+# Put the uv-managed virtualenv on PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Expose port
 EXPOSE 8000
 
-# Run with uvicorn via uv run to ensure the environment is correctly set
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run with uvicorn from the installed system environment
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

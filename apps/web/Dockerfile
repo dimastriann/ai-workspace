@@ -4,11 +4,12 @@ FROM node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV LEFTHOOK="0"
-RUN corepack enable
+RUN apk add --no-cache git && corepack enable
 WORKDIR /repo
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY scripts/install-hooks.mjs ./scripts/install-hooks.mjs
 COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --frozen-lockfile
 
