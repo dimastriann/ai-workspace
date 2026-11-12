@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 
+import { useLogout, useMe } from "@/lib/queries/auth";
 import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 
@@ -70,6 +71,9 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: user } = useMe();
+  const logout = useLogout();
   const { data: workspaces } = useWorkspaces();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
@@ -109,6 +113,25 @@ export function AppSidebar() {
             <span>No Workspace Selected</span>
           </div>
         )}
+
+        {user ? (
+          <div className={styles.account}>
+            <span className={styles.email} title={user.email}>
+              {user.email}
+            </span>
+            <button
+              type="button"
+              className={styles.signOut}
+              onClick={() => {
+                logout.mutate(undefined, {
+                  onSuccess: () => router.replace("/login"),
+                });
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

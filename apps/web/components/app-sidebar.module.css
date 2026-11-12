@@ -68,6 +68,41 @@
   opacity: 0.5;
 }
 
+.account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+
+.email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.signOut {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.signOut:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);

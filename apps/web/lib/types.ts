@@ -25,3 +25,15 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
 }
+
+export type Role = "admin" | "member" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type SettingValue = boolean | number | string;
