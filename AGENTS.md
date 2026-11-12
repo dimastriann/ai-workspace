@@ -6,7 +6,7 @@ Guidance for AI agents and humans working in this repository.
 
 AI Workspace — a full-stack AI platform (chat, RAG, agents) with:
 
-- `apps/web` — frontend (migrating from Nuxt 4 to Next.js 16)
+- `apps/web` — Next.js 16 frontend with a same-origin BFF
 - `apps/api` — FastAPI backend (Python 3.13, managed by `uv`)
 - `rust/parser` — optional high-performance document parser (Actix)
 - `skills/` — agent skills (added in a later phase)

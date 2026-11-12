@@ -10,7 +10,7 @@ pre-commit:
       glob: "apps/api/**/*.py"
       run: uv run ruff format .
     web-lint:
-      glob: "apps/{web,web-next}/**/*.{ts,tsx,js,jsx,json,css}"
+      glob: "apps/web/**/*.{ts,tsx,js,jsx,json,css}"
       run: pnpm exec biome check --write .
 
 commit-msg:
@@ -28,4 +28,4 @@ pre-push:
       root: "apps/api/"
       run: uv run pytest -q
     web-build:
-      run: pnpm --filter web build && pnpm --filter web-next build
+      run: pnpm --filter web build

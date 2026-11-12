@@ -14,13 +14,6 @@
       "apps/web/**/*.jsx",
       "apps/web/**/*.json",
       "apps/web/**/*.css",
-      "apps/web-next/**/*.ts",
-      "apps/web-next/**/*.tsx",
-      "apps/web-next/**/*.js",
-      "apps/web-next/**/*.mjs",
-      "apps/web-next/**/*.jsx",
-      "apps/web-next/**/*.json",
-      "apps/web-next/**/*.css",
       "*.js",
       "*.mjs",
       "*.json"

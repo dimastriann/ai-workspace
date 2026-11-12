@@ -3,20 +3,17 @@
 # =============================================================================
 
 services:
-  # ── Frontend (Nuxt 4) ────────────────────────────────────────────────────
+  # ── Frontend (Next.js 16) ───────────────────────────────────────────────
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - NUXT_PUBLIC_API_BASE=http://api:8000
+      - API_BASE_URL=http://api:8000
     depends_on:
       - api
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
 
   # ── Backend (FastAPI) ────────────────────────────────────────────────────
   api:

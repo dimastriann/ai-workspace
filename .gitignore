@@ -7,11 +7,10 @@
 .env.local
 .env.*.local
 
-# ── Node / Nuxt ──────────────────────────────────────────────────────────────
+# ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 dist/
-.nuxt/
-.nitro/
+.next/
 .output/
 .cache/
 *.log

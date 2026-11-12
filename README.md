@@ -53,12 +53,12 @@ This project is designed to demonstrate production-level engineering skills usin
 ```
                ┌────────────────────────────┐
                │        Frontend            │
-               │        (Nuxt 3)            │
+               │      (Next.js 16)          │
                └───────────┬────────────────┘
                            │ HTTP / WS
                ┌───────────▼────────────────┐
-               │     API Layer (Nuxt)       │
-               │  (Server Routes / BFF)     │
+               │     API Layer (Next.js)    │
+               │  (Route Handlers / BFF)    │
                └───────────┬────────────────┘
                            │
                ┌───────────▼────────────┐
@@ -87,13 +87,13 @@ This project is designed to demonstrate production-level engineering skills usin
 
 ## 🧰 Tech Stack
 
-### Frontend (Vue Ecosystem)
+### Frontend (React Ecosystem)
 
-- Vue 3
-- Nuxt 3 (SSR + server routes)
+- Next.js 16 (App Router + route handlers)
+- React 19
 - TypeScript
-- TailwindCSS
-- Pinia (state management)
+- Tailwind CSS v4
+- TanStack Query + Zustand (state management)
 
 ### Backend
 
@@ -123,7 +123,7 @@ This project is designed to demonstrate production-level engineering skills usin
 ### DevOps
 
 - Docker & Docker Compose
-- Vercel / Node hosting (Nuxt)
+- Vercel / Node hosting (Next.js)
 - AWS / GCP (backend)
 - Nginx (optional reverse proxy)
 ---
@@ -134,7 +134,7 @@ This project is designed to demonstrate production-level engineering skills usin
 ai-workspace/
 │
 ├── apps/
-│   ├── web/                 # Nuxt 3 frontend + server routes (BFF)
+│   ├── web/                 # Next.js frontend + route handlers (BFF)
 │   └── api/                 # FastAPI backend
 │
 ├── services/
@@ -196,12 +196,11 @@ docker-compose up --build
 
 ### 4. Manual Setup
 
-#### Frontend (Nuxt)
+#### Frontend (Next.js)
 
 ```bash
-cd apps/web
-npm install
-npm run dev
+pnpm install
+pnpm --filter web dev
 ```
 
 #### Backend (FastAPI)
@@ -224,7 +223,7 @@ cargo run
 
 ### 📥 Document Ingestion
 
-1. Upload file (via Nuxt frontend)
+1. Upload file (via Next.js frontend)
 2. Send to FastAPI backend
 3. Parse using Rust service
 4. Chunk text
@@ -235,7 +234,7 @@ cargo run
 ### 🔍 Query (RAG)
 
 1. User sends query
-2. Nuxt server route (BFF) forwards request
+2. Next.js route handler (BFF) forwards request
 3. Backend embeds query
 4. Retrieve relevant chunks
 5. Pass context to LLM
@@ -251,31 +250,31 @@ cargo run
 5. Streams result to frontend
 ---
 
-## 🌐 Nuxt Server (BFF Layer)
+## 🌐 Next.js Server (BFF Layer)
 
-Nuxt acts as a **Backend-for-Frontend (BFF)** layer:
+The Next.js app acts as a **Backend-for-Frontend (BFF)** layer:
 - Handles API proxying
 - Manages auth (future)
 - Streams LLM responses
 - Reduces direct exposure of backend services
 Example structure:
 ```
-apps/web/server/api/
-├── chat.ts
-├── rag.ts
-└── agent.ts
+apps/web/app/api/
+├── chat/route.ts
+├── documents/route.ts
+└── workspaces/route.ts
 ```
 ---
 
 ## 🚀 Deployment
 
-### Frontend (Nuxt)
+### Frontend (Next.js)
 
 - Deploy on Vercel or Node hosting
 
 ```bash
-npm run build
-npm run start
+pnpm --filter web build
+node apps/web/.next/standalone/apps/web/server.js
 ```
 ---
 
@@ -315,7 +314,7 @@ Deploy to:
 ### Frontend
 
 ```bash
-npm run test
+pnpm test
 ```
 
 ### Backend
@@ -338,7 +337,7 @@ pytest
 ### Phase 1
 
 - Chat + RAG MVP
-- Basic UI (Nuxt)
+- Basic UI (Next.js)
 - File upload
 
 ### Phase 2
@@ -365,9 +364,9 @@ pytest
 ## 📣 Portfolio Positioning
 
 This project demonstrates:
-- Fullstack system design (Vue + Python + Rust)
+- Fullstack system design (React/Next.js + Python + Rust)
 - LLM application architecture
-- BFF pattern using Nuxt
+- BFF pattern using Next.js
 - Performance optimization with Rust
 - Real-world AI product thinking
 ---
