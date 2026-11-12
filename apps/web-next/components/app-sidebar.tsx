@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+
+import { useWorkspaces } from "@/lib/queries/workspaces";
+import { useWorkspaceStore } from "@/lib/stores/workspace";
 
 import styles from "./app-sidebar.module.css";
 
@@ -67,6 +70,17 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { data: workspaces } = useWorkspaces();
+  const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
+
+  useEffect(() => {
+    if (!currentWorkspaceId && workspaces && workspaces.length > 0) {
+      setWorkspace(workspaces[0].id);
+    }
+  }, [currentWorkspaceId, workspaces, setWorkspace]);
+
+  const currentWorkspace = workspaces?.find((workspace) => workspace.id === currentWorkspaceId);
 
   return (
     <aside className={`${styles.sidebar} glass`}>
@@ -84,10 +98,17 @@ export function AppSidebar() {
       </nav>
 
       <div className={styles.footer}>
-        <div className={`${styles.workspaceBadge} ${styles.muted}`}>
-          <span aria-hidden="true">⚠️</span>
-          <span>No Workspace Selected</span>
-        </div>
+        {currentWorkspace ? (
+          <div className={styles.workspaceBadge}>
+            <span aria-hidden="true">📁</span>
+            <span>{currentWorkspace.name}</span>
+          </div>
+        ) : (
+          <div className={`${styles.workspaceBadge} ${styles.muted}`}>
+            <span aria-hidden="true">⚠️</span>
+            <span>No Workspace Selected</span>
+          </div>
+        )}
       </div>
     </aside>
   );
