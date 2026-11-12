@@ -45,3 +45,4 @@ async def test_list_documents_normalizes_legacy_type(
 
     assert response.status_code == 200
     assert response.json()[0]["document_type"] == "markdown"
+    assert response.json()[0]["status"] == "processing"

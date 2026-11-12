@@ -28,6 +28,7 @@ class DocumentMetadata(BaseModel):
     document_type: DocumentType
     size_bytes: int
     chunk_count: int = 0
+    status: str = "processing"
     workspace_id: str
     created_at: datetime
     updated_at: datetime

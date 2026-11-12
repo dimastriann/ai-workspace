@@ -59,6 +59,7 @@ async def list_documents(
             document_type=detect_document_type(d.filename),
             size_bytes=d.size_bytes,
             chunk_count=d.chunk_count,
+            status=d.status,
             workspace_id=str(d.workspace_id),
             created_at=d.created_at,
             updated_at=d.updated_at,
