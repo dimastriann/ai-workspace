@@ -2,7 +2,7 @@
 AI Workspace API — Document Management Router
 
 Endpoints for uploading, listing, and managing documents.
-Integrates with DocumentService for business logic and Taskiq for ingestion.
+Integrates with DocumentService for business logic and the job queue for ingestion.
 """
 
 from uuid import UUID
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db_session
 from app.models.document import DocumentMetadata, DocumentUploadResponse
 from app.services.document_service import document_service
+from app.services.document_types import detect_document_type
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ async def upload_document(
         return DocumentUploadResponse(
             document_id=str(db_doc.id),
             filename=db_doc.filename,
-            document_type=db_doc.document_type,
+            document_type=detect_document_type(db_doc.filename),
             chunk_count=0,  # Initially zero, updated by worker
             message="Document upload successful. Ingestion started.",
         )
@@ -50,7 +51,7 @@ async def list_documents(
         DocumentMetadata(
             id=str(d.id),
             filename=d.filename,
-            document_type=d.document_type,
+            document_type=detect_document_type(d.filename),
             size_bytes=d.size_bytes,
             chunk_count=d.chunk_count,
             workspace_id=str(d.workspace_id),

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Document
+from app.services.document_types import detect_document_type
 from app.services.job_service import job_service
 
 
@@ -31,7 +32,7 @@ class DocumentService:
         filename = os.path.basename(file.filename or "unnamed")
 
         # Determine document type from extension
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "text"
+        ext = detect_document_type(filename)
 
         db_doc = Document(
             id=document_id,

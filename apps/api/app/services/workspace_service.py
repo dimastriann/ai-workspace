@@ -8,6 +8,7 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.database import Workspace
 from app.models.workspace import WorkspaceCreate
@@ -27,7 +28,9 @@ class WorkspaceService:
     async def list_workspaces(db: AsyncSession) -> list[Workspace]:
         """List all available workspaces."""
         result = await db.execute(
-            select(Workspace).order_by(Workspace.created_at.desc())
+            select(Workspace)
+            .options(selectinload(Workspace.documents))
+            .order_by(Workspace.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -36,7 +39,11 @@ class WorkspaceService:
         workspace_id: uuid.UUID, db: AsyncSession
     ) -> Workspace | None:
         """Get a specific workspace by ID."""
-        result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+        result = await db.execute(
+            select(Workspace)
+            .options(selectinload(Workspace.documents))
+            .where(Workspace.id == workspace_id)
+        )
         return result.scalar_one_or_none()
 
 
