@@ -1,9 +1,9 @@
 """
 AI Workspace API — Chat Service
 
-Orchestrates the conversational AI logic using LangChain:
+Orchestrates the conversational AI logic:
 1. Session management (PostgreSQL history).
-2. RAG context retrieval (Qdrant search).
+2. Lexical context retrieval (Postgres full-text search).
 3. Streaming response generation (OpenAI/Ollama).
 """
 
@@ -17,9 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.vector_store import get_collection_name, qdrant_client
 from app.models.database import ChatMessage, ChatSession
-from app.services.embedding_service import embedding_service
+from app.services.retrieval import retrieval_service
 
 
 class ChatService:
@@ -64,7 +63,7 @@ class ChatService:
         # 1. Retrieve Context (RAG)
         context = ""
         if workspace_id:
-            context = await self._get_context(message, workspace_id)
+            context = await self._get_context(message, workspace_id, db)
 
         # 2. Prepare History
         history = await self._get_history(session_id, db)
@@ -106,20 +105,13 @@ class ChatService:
         db.add(assistant_msg)
         await db.commit()
 
-    async def _get_context(self, query: str, workspace_id: UUID) -> str:
-        """Perform semantic search in Qdrant."""
+    async def _get_context(
+        self, query: str, workspace_id: UUID, db: AsyncSession
+    ) -> str:
+        """Retrieve relevant chunks with Postgres full-text search."""
         try:
-            query_vector = await embedding_service.embed_query(query)
-            collection_name = get_collection_name(str(workspace_id))
-
-            search_results = qdrant_client.query_points(
-                collection_name=collection_name, query=query_vector, limit=5
-            ).points
-
-            return "\n---\n".join(
-                str((point.payload or {}).get("content", ""))
-                for point in search_results
-            )
+            chunks = await retrieval_service.search(query, workspace_id, db)
+            return "\n---\n".join(chunks)
         except Exception:
             return ""
 
