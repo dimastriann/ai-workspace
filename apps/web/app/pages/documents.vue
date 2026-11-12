@@ -171,7 +171,7 @@ function formatDate(dateStr: string) {
 
 <style scoped>
 .upload-zone {
-  border: 2px border-dashed var(--color-border);
+  border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
   padding: 40px 20px;
   text-align: center;
