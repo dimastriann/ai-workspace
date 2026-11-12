@@ -5,14 +5,14 @@ Configures the application with CORS, lifespan events,
 and router registration.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import chat, rag, agent, documents, workspaces
+from app.routers import agent, chat, documents, rag, workspaces
 
 
 @asynccontextmanager

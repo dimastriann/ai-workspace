@@ -8,23 +8,22 @@ Taskiq workers for processing uploaded documents:
 4. Update document metadata in PostgreSQL.
 """
 
-import httpx
 from uuid import UUID
-from typing import Any, Dict
 
-from taskiq import TaskiqDepends
-from qdrant_client.models import PointStruct, VectorParams, Distance
+import httpx
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from app.tasks.broker import broker
 from app.config import settings
-from app.core.database import get_db_session
-from app.core.vector_store import qdrant_client, get_collection_name
+from app.core.vector_store import get_collection_name, qdrant_client
 from app.models.database import Document
 from app.services.embedding_service import embedding_service
+from app.tasks.broker import broker
 
 
 @broker.task
-async def process_document(document_id: UUID, workspace_id: UUID, file_path: str) -> bool:
+async def process_document(
+    document_id: UUID, workspace_id: UUID, file_path: str
+) -> bool:
     """
     Background task to process an uploaded document.
     """
@@ -33,17 +32,16 @@ async def process_document(document_id: UUID, workspace_id: UUID, file_path: str
         with open(file_path, "rb") as f:
             files = {"file": (file_path.split("/")[-1], f)}
             response = await client.post(
-                f"{settings.parser_service_url}/parse",
-                files=files
+                f"{settings.parser_service_url}/parse", files=files
             )
-            
+
     if response.status_code != 200:
         # Update status to error in DB (manual session management in task)
         return False
 
     parsed_data = response.json()
     chunks = parsed_data.get("chunks", [])
-    
+
     if not chunks:
         return False
 
@@ -53,15 +51,14 @@ async def process_document(document_id: UUID, workspace_id: UUID, file_path: str
 
     # ── 3. Initialize Qdrant Collection ───────────────────────────────────────
     collection_name = get_collection_name(str(workspace_id))
-    
+
     # Check if collection exists, if not create it
     collections = qdrant_client.get_collections().collections
     if not any(c.name == collection_name for c in collections):
         qdrant_client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(
-                size=settings.embedding_dimension, 
-                distance=Distance.COSINE
+                size=settings.embedding_dimension, distance=Distance.COSINE
             ),
         )
 
@@ -75,23 +72,24 @@ async def process_document(document_id: UUID, workspace_id: UUID, file_path: str
                 "workspace_id": str(workspace_id),
                 "content": chunks[i]["content"],
                 "chunk_index": chunks[i]["chunk_index"],
-                "metadata": chunks[i].get("metadata", {})
-            }
+                "metadata": chunks[i].get("metadata", {}),
+            },
         )
         for i in range(len(chunks))
     ]
-    
-    qdrant_client.upsert(
-        collection_name=collection_name,
-        points=points
-    )
+
+    qdrant_client.upsert(collection_name=collection_name, points=points)
 
     # ── 5. Update PostgreSQL ─────────────────────────────────────────────────
     # Since we're in a background task, we open a fresh session
     from app.core.database import async_session
+
     async with async_session() as session:
         from sqlalchemy import select
-        result = await session.execute(select(Document).where(Document.id == document_id))
+
+        result = await session.execute(
+            select(Document).where(Document.id == document_id)
+        )
         db_doc = result.scalar_one_or_none()
         if db_doc:
             db_doc.status = "completed"

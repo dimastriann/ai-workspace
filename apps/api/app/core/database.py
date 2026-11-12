@@ -4,6 +4,8 @@ AI Workspace API — Database Connection
 Async SQLAlchemy engine and session factory for PostgreSQL.
 """
 
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -24,7 +26,7 @@ async_session = async_sessionmaker(
 )
 
 
-async def get_db_session() -> AsyncSession:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """
     Dependency that yields an async database session.
 

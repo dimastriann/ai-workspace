@@ -7,19 +7,8 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_list_documents(client: AsyncClient):
-    """GET /api/documents/ should return empty documents list."""
-    response = await client.get("/api/documents/")
-    assert response.status_code == 200
-    data = response.json()
-    assert "documents" in data
-    assert data["documents"] == []
+async def test_list_documents_rejects_invalid_workspace_id(client: AsyncClient):
+    """The workspace id path parameter must be a UUID."""
+    response = await client.get("/api/documents/not-a-uuid")
 
-
-@pytest.mark.asyncio
-async def test_get_document(client: AsyncClient):
-    """GET /api/documents/{id} should return a stub response."""
-    response = await client.get("/api/documents/test-doc-123")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["document_id"] == "test-doc-123"
+    assert response.status_code == 422

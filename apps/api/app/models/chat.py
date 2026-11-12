@@ -13,8 +13,12 @@ class ChatMessageRequest(BaseModel):
     """Request body for sending a chat message."""
 
     message: str = Field(..., min_length=1, description="The user's message")
-    session_id: str | None = Field(None, description="Chat session ID (auto-created if not provided)")
-    workspace_id: str | None = Field(None, description="Workspace context for the conversation")
+    session_id: str | None = Field(
+        None, description="Chat session ID (auto-created if not provided)"
+    )
+    workspace_id: str | None = Field(
+        None, description="Workspace context for the conversation"
+    )
 
 
 class ChatMessageResponse(BaseModel):

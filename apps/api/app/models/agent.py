@@ -22,9 +22,13 @@ class TaskStatus(StrEnum):
 class AgentTaskRequest(BaseModel):
     """Request body for submitting an agent task."""
 
-    instruction: str = Field(..., min_length=1, description="The task instruction for the agent")
+    instruction: str = Field(
+        ..., min_length=1, description="The task instruction for the agent"
+    )
     workspace_id: str | None = Field(None, description="Workspace context")
-    tools: list[str] = Field(default_factory=list, description="Optional list of tools to enable")
+    tools: list[str] = Field(
+        default_factory=list, description="Optional list of tools to enable"
+    )
 
 
 class AgentStep(BaseModel):

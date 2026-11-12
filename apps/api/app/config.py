@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     # ── Database ─────────────────────────────────────────────────────────
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_workspace"
+    database_url: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_workspace"
+    )
 
     # ── Redis ────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"

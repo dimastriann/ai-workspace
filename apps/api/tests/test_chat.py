@@ -7,19 +7,16 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_create_chat_message(client: AsyncClient):
-    """POST /api/chat/ should return a stub response."""
-    response = await client.post("/api/chat/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "stub"
+async def test_chat_stream_rejects_empty_payload(client: AsyncClient):
+    """POST /api/chat/stream should validate the required message field."""
+    response = await client.post("/api/chat/stream", json={})
+
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_list_chat_sessions(client: AsyncClient):
-    """GET /api/chat/sessions should return empty sessions list."""
-    response = await client.get("/api/chat/sessions")
-    assert response.status_code == 200
-    data = response.json()
-    assert "sessions" in data
-    assert data["sessions"] == []
+async def test_chat_stream_rejects_blank_message(client: AsyncClient):
+    """A blank message is rejected by request validation."""
+    response = await client.post("/api/chat/stream", json={"message": ""})
+
+    assert response.status_code == 422
