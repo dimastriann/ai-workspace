@@ -38,18 +38,31 @@ async def chat_stream(
         session_id_uuid, workspace_id_uuid, db
     )
 
+    context = ""
+    sources: list[dict[str, object]] = []
+    if workspace_id_uuid:
+        context, sources = await chat_service.build_context(
+            request.message, workspace_id_uuid, db
+        )
+
     # 2. Return SSE Stream
     async def event_generator():
         # Start message with metadata
-        yield f'data: {{"session_id": "{session.id}", "event": "start"}}\n\n'
+        yield (
+            "data: "
+            + json.dumps({"session_id": str(session.id), "event": "start"})
+            + "\n\n"
+        )
+        yield "data: " + json.dumps({"event": "sources", "sources": sources}) + "\n\n"
 
         async for token in chat_service.chat_stream(
             message=request.message,
             session_id=session.id,
             workspace_id=workspace_id_uuid,
             db=db,
+            context=context,
         ):
-            yield f'data: {{"token": {json.dumps(token)}}}\n\n'
+            yield "data: " + json.dumps({"token": token}) + "\n\n"
 
         yield 'data: {"event": "done"}\n\n'
 

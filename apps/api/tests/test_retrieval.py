@@ -47,7 +47,9 @@ async def test_search_returns_matching_chunks(db_session: AsyncSession) -> None:
 
     results = await retrieval_service.search("alpha", workspace.id, db_session)
 
-    assert results == ["alpha beta gamma"]
+    assert [chunk.content for chunk in results] == ["alpha beta gamma"]
+    assert results[0].filename == "notes.md"
+    assert results[0].ordinal == 0
 
 
 async def test_search_scopes_to_workspace(db_session: AsyncSession) -> None:

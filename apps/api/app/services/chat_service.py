@@ -50,20 +50,43 @@ class ChatService:
         await db.refresh(new_session)
         return new_session
 
+    async def build_context(
+        self, query: str, workspace_id: UUID, db: AsyncSession
+    ) -> tuple[str, list[dict[str, object]]]:
+        """Retrieve context plus a source list for the response."""
+        try:
+            chunks = await retrieval_service.search(query, workspace_id, db)
+        except Exception:
+            return "", []
+
+        context = "\n---\n".join(chunk.content for chunk in chunks)
+        sources = [
+            {
+                "document_id": chunk.document_id,
+                "filename": chunk.filename,
+                "ordinal": chunk.ordinal,
+                "snippet": chunk.content[:200],
+            }
+            for chunk in chunks
+        ]
+        return context, sources
+
     async def chat_stream(
         self,
         message: str,
         session_id: UUID,
         workspace_id: UUID | None,
         db: AsyncSession,
+        context: str | None = None,
     ) -> AsyncGenerator[str]:
         """
         Main chat loop with RAG and streaming.
         """
-        # 1. Retrieve Context (RAG)
-        context = ""
-        if workspace_id:
-            context = await self._get_context(message, workspace_id, db)
+        # 1. Retrieve Context (RAG) unless the caller already did
+        if context is None:
+            context = ""
+            if workspace_id:
+                context, _ = await self.build_context(message, workspace_id, db)
 
         # 2. Prepare History
         history = await self._get_history(session_id, db)
@@ -104,16 +127,6 @@ class ChatService:
         )
         db.add(assistant_msg)
         await db.commit()
-
-    async def _get_context(
-        self, query: str, workspace_id: UUID, db: AsyncSession
-    ) -> str:
-        """Retrieve relevant chunks with Postgres full-text search."""
-        try:
-            chunks = await retrieval_service.search(query, workspace_id, db)
-            return "\n---\n".join(chunks)
-        except Exception:
-            return ""
 
     async def _get_history(
         self, session_id: UUID, db: AsyncSession
