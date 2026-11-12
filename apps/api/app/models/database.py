@@ -181,3 +181,21 @@ class Session(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="sessions")
+
+
+class AppSetting(Base):
+    """
+    Runtime application setting, with secrets encrypted at rest.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    value_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_secret: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
