@@ -1,0 +1,162 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.secondary {
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr 3fr;
+  }
+}
+
+.uploadCard {
+  align-self: start;
+}
+
+.dropZone {
+  display: flex;
+  width: 100%;
+  min-height: 180px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 40px 20px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dropZone:hover:not(:disabled),
+.dragging {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.dropContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  white-space: normal;
+}
+
+.dropIcon {
+  font-size: 1.875rem;
+}
+
+.dropTitle {
+  font-size: 0.875rem;
+}
+
+.dropHint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.hidden {
+  display: none;
+}
+
+.status {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+}
+
+.status.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.status.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+}
+
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.empty {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: 12px;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filename {
+  font-weight: 500;
+}
+
+.badge {
+  background: var(--color-bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
