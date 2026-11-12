@@ -27,6 +27,16 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString();
 }
 
+function statusClass(status: string) {
+  if (status === "completed") {
+    return styles.statusCompleted;
+  }
+  if (status === "error") {
+    return styles.statusError;
+  }
+  return styles.statusProcessing;
+}
+
 export default function DocumentsPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const { data: documents = [], isLoading } = useDocuments(workspaceId);
@@ -140,6 +150,7 @@ export default function DocumentsPage() {
                     <th>Type</th>
                     <th>Size</th>
                     <th>Chunks</th>
+                    <th>Status</th>
                     <th>Created</th>
                   </tr>
                 </thead>
@@ -152,6 +163,11 @@ export default function DocumentsPage() {
                       </td>
                       <td>{formatSize(document.size_bytes)}</td>
                       <td>{document.chunk_count}</td>
+                      <td>
+                        <span className={`${styles.statusBadge} ${statusClass(document.status)}`}>
+                          {document.status}
+                        </span>
+                      </td>
                       <td>{formatDate(document.created_at)}</td>
                     </tr>
                   ))}
