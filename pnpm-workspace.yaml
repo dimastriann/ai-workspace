@@ -8,3 +8,6 @@ allowBuilds:
   lefthook: true
   sharp: true
   unrs-resolver: true
+
+# Supply-chain cooldown: reject versions published less than a day ago.
+minimumReleaseAge: 1440

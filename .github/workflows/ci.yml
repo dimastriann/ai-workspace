@@ -31,6 +31,7 @@ jobs:
               - "apps/api/**"
             web:
               - "apps/web/**"
+              - "apps/web-next/**"
               - "package.json"
               - "pnpm-lock.yaml"
               - "pnpm-workspace.yaml"
@@ -87,7 +88,7 @@ jobs:
       - name: Tests
         run: pnpm test
       - name: Build
-        run: pnpm --filter web build
+        run: pnpm --filter web build && pnpm --filter web-next build
 
   rust:
     name: Parser (fmt, clippy, tests)

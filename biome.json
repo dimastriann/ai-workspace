@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -14,6 +14,13 @@
       "apps/web/**/*.jsx",
       "apps/web/**/*.json",
       "apps/web/**/*.css",
+      "apps/web-next/**/*.ts",
+      "apps/web-next/**/*.tsx",
+      "apps/web-next/**/*.js",
+      "apps/web-next/**/*.mjs",
+      "apps/web-next/**/*.jsx",
+      "apps/web-next/**/*.json",
+      "apps/web-next/**/*.css",
       "*.js",
       "*.mjs",
       "*.json"
@@ -37,6 +44,11 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }
