@@ -12,20 +12,11 @@ from app.core.database import get_db_session
 from app.dependencies import get_current_user
 from app.models.database import User
 from app.models.user import LoginRequest, UserResponse
+from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service
+from app.services.user_mapping import to_user_response
 
 router = APIRouter()
-
-
-def to_user_response(user: User) -> UserResponse:
-    """Map an ORM user to its public representation."""
-    return UserResponse(
-        id=str(user.id),
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    )
 
 
 @router.post("/login", response_model=UserResponse)
@@ -58,6 +49,12 @@ async def login(
         samesite="lax",
         max_age=settings.session_ttl_hours * 3600,
         path="/",
+    )
+    await audit_service.record(
+        db,
+        action="auth.login",
+        actor_id=user.id,
+        ip=request.client.host if request.client else None,
     )
     return to_user_response(user)
 

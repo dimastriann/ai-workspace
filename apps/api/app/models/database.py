@@ -199,3 +199,20 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now()
     )
+
+
+class AuditLog(Base):
+    """
+    Append-only record of security-relevant actions.
+    """
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    target: Mapped[str | None] = mapped_column(String(255))
+    details: Mapped[str | None] = mapped_column(Text)
+    ip: Mapped[str | None] = mapped_column(String(45))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())

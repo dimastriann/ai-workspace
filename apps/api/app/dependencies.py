@@ -59,3 +59,13 @@ def require_role(required: Role) -> Callable[..., Awaitable[User]]:
 require_viewer = require_role(Role.VIEWER)
 require_member = require_role(Role.MEMBER)
 require_admin = require_role(Role.ADMIN)
+
+
+async def require_same_origin(request: Request) -> None:
+    """Reject state-changing requests from unexpected origins."""
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in settings.cors_origin_list:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid request origin",
+        )

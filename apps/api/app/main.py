@@ -15,7 +15,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.database import async_session
 from app.models.enums import Role
-from app.routers import agent, auth, chat, documents, rag, workspaces
+from app.routers import (
+    agent,
+    auth,
+    chat,
+    documents,
+    rag,
+    users,
+    workspaces,
+)
+from app.routers import (
+    settings as settings_router,
+)
 from app.services.auth_service import auth_service
 
 logger = logging.getLogger(__name__)
@@ -78,6 +89,8 @@ app.add_middleware(
 
 # ── Routers ──────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
