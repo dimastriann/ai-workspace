@@ -5,12 +5,34 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { useChatStream } from "@/lib/hooks/use-chat-stream";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
+import type { Source } from "@/lib/types";
 
 import styles from "./page.module.css";
 
+function SourceList({ sources }: { sources?: Source[] }) {
+  if (!sources?.length) {
+    return null;
+  }
+
+  return (
+    <div className={styles.sources}>
+      {sources.map((source) => (
+        <span
+          key={`${source.document_id}-${source.ordinal}`}
+          className={styles.source}
+          title={source.snippet}
+        >
+          {source.filename} · chunk {source.ordinal + 1}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
-  const { messages, streamingContent, isStreaming, error, send, reset } = useChatStream();
+  const { messages, streamingContent, streamingSources, isStreaming, error, send, reset } =
+    useChatStream();
   const [input, setInput] = useState("");
   const messageContainer = useRef<HTMLDivElement>(null);
 
@@ -61,6 +83,7 @@ export default function ChatPage() {
                   <div className={styles.roleBadge}>{message.role === "user" ? "You" : "AI"}</div>
                   <div className={styles.text}>{message.content}</div>
                 </div>
+                {message.role === "assistant" ? <SourceList sources={message.sources} /> : null}
               </div>
             ))}
 
@@ -75,6 +98,7 @@ export default function ChatPage() {
                     </span>
                   </div>
                 </div>
+                <SourceList sources={streamingSources} />
               </div>
             ) : null}
 

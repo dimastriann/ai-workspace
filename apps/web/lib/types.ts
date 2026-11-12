@@ -13,6 +13,7 @@ export interface DocumentRecord {
   document_type: string;
   size_bytes: number;
   chunk_count: number;
+  status: string;
   workspace_id: string;
   created_at: string;
   updated_at: string;
@@ -20,10 +21,18 @@ export interface DocumentRecord {
 
 export type ChatRole = "user" | "assistant";
 
+export interface Source {
+  document_id: string;
+  filename: string;
+  ordinal: number;
+  snippet: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
+  sources?: Source[];
 }
 
 export type Role = "admin" | "member" | "viewer";

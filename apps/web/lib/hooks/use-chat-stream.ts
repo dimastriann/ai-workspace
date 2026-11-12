@@ -2,21 +2,23 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import type { ChatMessage, ChatRole } from "@/lib/types";
+import type { ChatMessage, ChatRole, Source } from "@/lib/types";
 
 interface StreamPayload {
   token?: string;
   session_id?: string;
   event?: string;
+  sources?: Source[];
 }
 
-function createMessage(role: ChatRole, content: string): ChatMessage {
-  return { id: crypto.randomUUID(), role, content };
+function createMessage(role: ChatRole, content: string, sources: Source[] = []): ChatMessage {
+  return { id: crypto.randomUUID(), role, content, sources };
 }
 
 export function useChatStream() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
+  const [streamingSources, setStreamingSources] = useState<Source[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +33,7 @@ export function useChatStream() {
       setError(null);
       setMessages((previous) => [...previous, createMessage("user", content)]);
       setStreamingContent("");
+      setStreamingSources([]);
       setIsStreaming(true);
 
       const controller = new AbortController();
@@ -56,6 +59,7 @@ export function useChatStream() {
         const decoder = new TextDecoder();
         let buffer = "";
         let accumulated = "";
+        let accumulatedSources: Source[] = [];
 
         while (true) {
           const { value, done } = await reader.read();
@@ -88,6 +92,9 @@ export function useChatStream() {
             if (data.token) {
               accumulated += data.token;
               setStreamingContent(accumulated);
+            } else if (data.sources) {
+              accumulatedSources = data.sources;
+              setStreamingSources(data.sources);
             } else if (data.session_id) {
               setSessionId(data.session_id);
             }
@@ -95,9 +102,13 @@ export function useChatStream() {
         }
 
         if (accumulated) {
-          setMessages((previous) => [...previous, createMessage("assistant", accumulated)]);
+          setMessages((previous) => [
+            ...previous,
+            createMessage("assistant", accumulated, accumulatedSources),
+          ]);
         }
         setStreamingContent("");
+        setStreamingSources([]);
       } catch (caught) {
         if (caught instanceof DOMException && caught.name === "AbortError") {
           return;
@@ -118,6 +129,7 @@ export function useChatStream() {
   const reset = useCallback(() => {
     setMessages([]);
     setStreamingContent("");
+    setStreamingSources([]);
     setSessionId(null);
     setError(null);
   }, []);
@@ -125,6 +137,7 @@ export function useChatStream() {
   return {
     messages,
     streamingContent,
+    streamingSources,
     isStreaming,
     sessionId,
     error,
