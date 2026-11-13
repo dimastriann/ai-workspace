@@ -64,6 +64,7 @@ services:
       - RUST_LOG=info
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────
+  # 17 is retained for data-volume compatibility; the 18 upgrade is documented.
   postgres:
     image: postgres:17-alpine
     ports:
@@ -82,7 +83,7 @@ services:
 
   # ── Redis (optional cache) ───────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     profiles: ["optional"]
     ports:
       - "6379:6379"
@@ -96,7 +97,7 @@ services:
 
   # ── Qdrant (optional semantic retrieval) ─────────────────────────────────
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.20.0
     profiles: ["optional"]
     ports:
       - "6333:6333"   # REST API
