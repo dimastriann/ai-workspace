@@ -10,7 +10,10 @@ import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
+
+from app.config import settings
+from app.core.rate_limit import rate_limiter
 
 logger = logging.getLogger("app.request")
 
@@ -53,3 +56,39 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             },
         )
         return response
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Apply per-client limits to auth, upload, and general API routes."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if not settings.rate_limit_enabled or request.url.path == "/health":
+            return await call_next(request)
+
+        rule = self._rule_for(request.url.path)
+        if rule is None:
+            return await call_next(request)
+
+        name, limit = rule
+        client = request.client.host if request.client else "unknown"
+        if not rate_limiter.allow(
+            f"{name}:{client}", limit, settings.rate_limit_window_seconds
+        ):
+            return JSONResponse(
+                {"detail": "Rate limit exceeded. Try again later."},
+                status_code=429,
+                headers={
+                    "Retry-After": str(settings.rate_limit_window_seconds),
+                },
+            )
+
+        return await call_next(request)
+
+    def _rule_for(self, path: str) -> tuple[str, int] | None:
+        if path.startswith("/api/auth/login"):
+            return "auth", settings.rate_limit_auth
+        if path.startswith("/api/documents/upload"):
+            return "upload", settings.rate_limit_upload
+        if path.startswith("/api/"):
+            return "api", settings.rate_limit_api
+        return None

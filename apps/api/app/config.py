@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = False
 
+    # ── Rate limiting ────────────────────────────────────────────────────
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
+    rate_limit_api: int = 120
+    rate_limit_auth: int = 10
+    rate_limit_upload: int = 20
+
     @property
     def json_logs(self) -> bool:
         """Use JSON logs in production unless explicitly disabled."""

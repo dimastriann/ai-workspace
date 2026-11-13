@@ -12,7 +12,9 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings as app_settings
 from app.core.database import get_db_session
+from app.core.rate_limit import rate_limiter
 from app.main import app
 from app.models.database import Base
 from app.models.enums import Role
@@ -91,3 +93,12 @@ async def viewer_client(
 ) -> AsyncGenerator[AsyncClient]:
     await _create_and_login(auth_client, db_session, VIEWER_EMAIL, Role.VIEWER)
     yield auth_client
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits(monkeypatch: pytest.MonkeyPatch):
+    """Keep rate limiting off by default; tests opt in explicitly."""
+    monkeypatch.setattr(app_settings, "rate_limit_enabled", False)
+    rate_limiter.reset()
+    yield
+    rate_limiter.reset()
