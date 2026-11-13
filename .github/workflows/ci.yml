@@ -88,6 +88,10 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm --filter web build
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: E2E smoke tests
+        run: pnpm --filter web test:e2e
 
   rust:
     name: Parser (fmt, clippy, tests)
