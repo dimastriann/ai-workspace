@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     # ── Skills ───────────────────────────────────────────────────────────
     skills_dir: str = "skills"
 
+    # ── Logging ──────────────────────────────────────────────────────────
+    log_level: str = "INFO"
+    log_json: bool = False
+
+    @property
+    def json_logs(self) -> bool:
+        """Use JSON logs in production unless explicitly disabled."""
+        return self.log_json or self.app_env == "production"
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Parse comma-separated CORS origins into a list."""

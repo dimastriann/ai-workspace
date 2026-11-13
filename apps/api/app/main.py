@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.core.database import async_session
+from app.core.logging import configure_logging
+from app.core.middleware import RequestContextMiddleware
 from app.models.enums import Role
 from app.routers import (
     agent,
@@ -62,6 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     clients will be initialized here in later phases.
     """
     # ── Startup ──────────────────────────────────────────────────────
+    configure_logging()
     logger.info("AI Workspace API starting in %s mode", settings.app_env)
     try:
         await bootstrap_admin()
@@ -87,6 +90,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 # ── Routers ──────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
