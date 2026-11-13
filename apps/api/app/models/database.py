@@ -279,6 +279,33 @@ class DocumentChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
+class DocumentConversion(Base):
+    """
+    Markdown conversion job for a document.
+    """
+
+    __tablename__ = "document_conversions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id"), nullable=False, index=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
+    )
+    include_images: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    markdown_path: Mapped[str | None] = mapped_column(String(500))
+    assets_path: Mapped[str | None] = mapped_column(String(500))
+    error: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+
 class AgentRun(Base):
     """
     A single agent execution.
