@@ -46,3 +46,40 @@ export interface User {
 }
 
 export type SettingValue = boolean | number | string;
+
+export interface Skill {
+  name: string;
+  description: string;
+  permissions: string[];
+  version: string;
+}
+
+export interface AgentToolEvent {
+  id: string;
+  tool: string;
+  status: string;
+  output: string;
+}
+
+export interface AgentRunSummary {
+  id: string;
+  instruction: string;
+  skill: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface AgentStep {
+  ordinal: number;
+  kind: string;
+  tool_name: string | null;
+  input: string | null;
+  output: string | null;
+  status: string;
+}
+
+export interface AgentRunDetail extends AgentRunSummary {
+  result: string | null;
+  error: string | null;
+  steps: AgentStep[];
+}
