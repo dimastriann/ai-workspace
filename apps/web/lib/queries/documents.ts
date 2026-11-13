@@ -50,13 +50,16 @@ export function useUploadDocument(workspaceId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (input: { file: File; folderId?: string | null }) => {
       if (!workspaceId) {
         throw new Error("No workspace selected");
       }
 
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", input.file);
+      if (input.folderId) {
+        formData.append("folder_id", input.folderId);
+      }
 
       const response = await fetch(`/api/documents/upload/${workspaceId}`, {
         method: "POST",
@@ -67,6 +70,31 @@ export function useUploadDocument(workspaceId: string | null) {
         throw new Error("Upload failed");
       }
 
+      return response.json();
+    },
+    onSuccess: () => {
+      if (workspaceId) {
+        void queryClient.invalidateQueries({
+          queryKey: documentKeys.byWorkspace(workspaceId),
+        });
+      }
+    },
+  });
+}
+
+export function useMoveDocument(workspaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { documentId: string; folderId: string | null }) => {
+      const response = await fetch(`/api/documents/${encodeURIComponent(input.documentId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folder_id: input.folderId }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to move document");
+      }
       return response.json();
     },
     onSuccess: () => {
