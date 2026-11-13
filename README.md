@@ -164,6 +164,14 @@ ai-workspace/
 ```
 ---
 
+## 📚 Documentation
+
+- [Architecture](docs/architecture.md)
+- [Deployment](docs/deployment.md)
+- [RBAC matrix](docs/rbac.md)
+
+---
+
 ## ⚙️ Development Setup
 
 ### 1. Clone Repository
