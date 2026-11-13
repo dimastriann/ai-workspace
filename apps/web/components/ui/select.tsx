@@ -30,7 +30,8 @@ export interface SelectProps {
 }
 
 interface Position {
-  top: number;
+  top?: number;
+  bottom?: number;
   left: number;
   width: number;
   maxHeight: number;
@@ -72,10 +73,10 @@ export function Select({
     const spaceAbove = rect.top - 8;
     const estimated = Math.min(options.length * 38 + 12, 280);
     const openUp = spaceBelow < estimated && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, Math.min(280, openUp ? spaceAbove : spaceBelow));
+    const maxHeight = Math.min(280, Math.max(0, openUp ? spaceAbove : spaceBelow));
 
     setPosition({
-      top: openUp ? Math.max(8, rect.top - maxHeight - 4) : rect.bottom + 4,
+      ...(openUp ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
       left: rect.left,
       width: rect.width,
       maxHeight,
@@ -229,6 +230,7 @@ export function Select({
               className={styles.listbox}
               style={{
                 top: position.top,
+                bottom: position.bottom,
                 left: position.left,
                 width: position.width,
                 maxHeight: position.maxHeight,
