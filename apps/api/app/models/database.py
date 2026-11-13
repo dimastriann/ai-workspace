@@ -50,6 +50,36 @@ class Workspace(Base):
     )
 
 
+class DocumentFolder(Base):
+    """
+    A folder in a workspace document tree.
+    """
+
+    __tablename__ = "document_folders"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "parent_id",
+            "name",
+            name="uq_document_folders_scope_name",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id"), nullable=False, index=True
+    )
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document_folders.id"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+
 class Document(Base):
     """
     Metadata for uploaded documents.
@@ -60,6 +90,11 @@ class Document(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workspaces.id"), nullable=False
+    )
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document_folders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)

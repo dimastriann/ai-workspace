@@ -16,6 +16,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Request,
     Response,
@@ -30,6 +31,7 @@ from app.core.database import get_db_session
 from app.core.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
+    FolderNotFoundError,
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
 )
@@ -37,9 +39,11 @@ from app.dependencies import require_member, require_viewer
 from app.models.conversion import ConversionRequest, ConversionResponse
 from app.models.database import Document, DocumentConversion, User
 from app.models.document import DocumentMetadata, DocumentUploadResponse
+from app.models.folder import DocumentMoveRequest
 from app.services.audit_service import audit_service
 from app.services.document_service import document_service
 from app.services.document_types import detect_document_type
+from app.services.folder_service import folder_service
 from app.services.job_service import job_service
 from app.services.storage import ensure_within_uploads
 
@@ -63,6 +67,21 @@ def _conversion_response(conversion: DocumentConversion) -> ConversionResponse:
 def _download_stem(filename: str) -> str:
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(filename).stem)
     return stem or "document"
+
+
+def _document_metadata(document: Document) -> DocumentMetadata:
+    return DocumentMetadata(
+        id=str(document.id),
+        filename=document.filename,
+        document_type=detect_document_type(document.filename),
+        size_bytes=document.size_bytes,
+        chunk_count=document.chunk_count,
+        status=document.status,
+        workspace_id=str(document.workspace_id),
+        folder_id=str(document.folder_id) if document.folder_id else None,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+    )
 
 
 async def _latest_conversion(
@@ -113,6 +132,7 @@ async def _completed_conversion(
 async def upload_document(
     workspace_id: UUID,
     file: UploadFile = File(...),
+    folder_id: UUID | None = Form(None),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(require_member),
 ):
@@ -121,7 +141,9 @@ async def upload_document(
     Triggers asynchronous parsing and indexing.
     """
     try:
-        db_doc = await document_service.upload_document(workspace_id, file, db)
+        db_doc = await document_service.upload_document(
+            workspace_id, file, db, folder_id
+        )
         return DocumentUploadResponse(
             document_id=str(db_doc.id),
             filename=db_doc.filename,
@@ -138,6 +160,10 @@ async def upload_document(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
         ) from exc
     except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except FolderNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
@@ -159,20 +185,7 @@ async def list_documents(
 ):
     """List all documents in a workspace."""
     docs = await document_service.get_workspace_documents(workspace_id, db)
-    return [
-        DocumentMetadata(
-            id=str(d.id),
-            filename=d.filename,
-            document_type=detect_document_type(d.filename),
-            size_bytes=d.size_bytes,
-            chunk_count=d.chunk_count,
-            status=d.status,
-            workspace_id=str(d.workspace_id),
-            created_at=d.created_at,
-            updated_at=d.updated_at,
-        )
-        for d in docs
-    ]
+    return [_document_metadata(d) for d in docs]
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -199,6 +212,37 @@ async def delete_document(
         ip=request.client.host if request.client else None,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{document_id}", response_model=DocumentMetadata)
+async def move_document(
+    document_id: UUID,
+    data: DocumentMoveRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+) -> DocumentMetadata:
+    """Move a document to a folder, or to the workspace root."""
+    try:
+        document = await folder_service.move_document(document_id, data.folder_id, db)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except FolderNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    await audit_service.record(
+        db,
+        action="documents.move",
+        actor_id=user.id,
+        target=str(document_id),
+        details={"folder_id": str(data.folder_id or "")},
+        ip=request.client.host if request.client else None,
+    )
+    return _document_metadata(document)
 
 
 @router.post(

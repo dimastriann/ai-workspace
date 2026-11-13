@@ -30,6 +30,7 @@ class DocumentMetadata(BaseModel):
     chunk_count: int = 0
     status: str = "processing"
     workspace_id: str
+    folder_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

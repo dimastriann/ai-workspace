@@ -17,10 +17,11 @@ from app.config import settings
 from app.core.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
+    FolderNotFoundError,
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
 )
-from app.models.database import Document, DocumentChunk, Workspace
+from app.models.database import Document, DocumentChunk, DocumentFolder, Workspace
 from app.services.document_types import detect_document_type
 from app.services.job_service import job_service
 from app.services.storage import (
@@ -34,11 +35,18 @@ from app.services.storage import (
 class DocumentService:
     @staticmethod
     async def upload_document(
-        workspace_id: uuid.UUID, file: UploadFile, db: AsyncSession
+        workspace_id: uuid.UUID,
+        file: UploadFile,
+        db: AsyncSession,
+        folder_id: uuid.UUID | None = None,
     ) -> Document:
         """Validate, store, register, and enqueue a document."""
         if await db.get(Workspace, workspace_id) is None:
             raise WorkspaceNotFoundError("Workspace not found")
+        if folder_id is not None:
+            folder = await db.get(DocumentFolder, folder_id)
+            if folder is None or folder.workspace_id != workspace_id:
+                raise FolderNotFoundError("Folder not found")
 
         filename = Path(file.filename or "unnamed").name
         suffix = Path(filename).suffix.lower().lstrip(".")
@@ -62,6 +70,7 @@ class DocumentService:
         db_doc = Document(
             id=document_id,
             workspace_id=workspace_id,
+            folder_id=folder_id,
             filename=filename,
             document_type=detect_document_type(filename),
             size_bytes=len(data),

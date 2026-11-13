@@ -19,3 +19,11 @@ class WorkspaceNotFoundError(UploadError):
 
 class DocumentNotFoundError(Exception):
     """The requested document does not exist."""
+
+
+class FolderNotFoundError(Exception):
+    """The requested folder does not exist."""
+
+
+class FolderConflictError(Exception):
+    """A folder operation conflicts with existing structure or names."""
