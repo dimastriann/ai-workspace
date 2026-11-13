@@ -91,6 +91,21 @@ allowed if any gate it touches is red.
 - Bug fixes include a regression test.
 - Prefer covering behavior and contracts over implementation details.
 
+## Development agent skills
+
+Coding-agent skills for building this repository live in `.agents/skills/<name>/SKILL.md`
+(repo-scoped, instructions only). They are separate from the product runtime skills in
+`skills/`, which the app's agent uses.
+
+- Codex and OpenCode read `.agents/skills` natively.
+- Claude Code reads `.claude/skills/<name>/SKILL.md`, which are committed pointers to the
+  canonical files. When editing a skill's `name` or `description`, update its pointer too.
+- Available: `repo-gates`, `feature-slice`, `api-endpoint`, `db-migration`, `docker-local`.
+- `docker-local` is optional: skip cleanly when Docker is unavailable; never block other
+  work on it and never run destructive Docker commands without confirmation.
+- Invocation: Claude Code `/skill-name`; Codex `$skill-name` or `/skills`; OpenCode
+  `/skills` or `@skill-name`.
+
 ## Pull request / review checklist
 
 - [ ] Change is scoped and atomic; commit messages explain intent.
