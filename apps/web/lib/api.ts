@@ -1,5 +1,7 @@
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
 
+const NULL_BODY_STATUS = new Set([204, 205, 304]);
+
 export class ApiError extends Error {
   status: number;
 
@@ -33,7 +35,7 @@ export async function proxyJson(path: string, init: RequestInit = {}): Promise<R
   const response = await apiFetch(path, init);
   const body = await response.text();
 
-  return new Response(body, {
+  return new Response(NULL_BODY_STATUS.has(response.status) ? null : body, {
     status: response.status,
     headers: {
       "content-type": response.headers.get("content-type") ?? "application/json",
@@ -49,7 +51,7 @@ export async function proxyForm(path: string, formData: FormData): Promise<Respo
   });
   const body = await response.text();
 
-  return new Response(body, {
+  return new Response(NULL_BODY_STATUS.has(response.status) ? null : body, {
     status: response.status,
     headers: {
       "content-type": response.headers.get("content-type") ?? "application/json",
@@ -79,7 +81,10 @@ export async function proxyFormWithCookies(
     headers.set("set-cookie", setCookie);
   }
 
-  return new Response(body, { status: response.status, headers });
+  return new Response(NULL_BODY_STATUS.has(response.status) ? null : body, {
+    status: response.status,
+    headers,
+  });
 }
 
 export async function proxyWithCookies(
@@ -108,7 +113,10 @@ export async function proxyWithCookies(
     headers.set("set-cookie", setCookie);
   }
 
-  return new Response(body, { status: response.status, headers });
+  return new Response(NULL_BODY_STATUS.has(response.status) ? null : body, {
+    status: response.status,
+    headers,
+  });
 }
 
 const FILE_HEADERS = ["content-type", "content-disposition", "content-length"];
