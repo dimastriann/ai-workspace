@@ -5,6 +5,7 @@ Pydantic schemas for agent runs, steps, and responses.
 """
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -13,7 +14,7 @@ class AgentRunRequest(BaseModel):
     """Request body for starting an agent run."""
 
     instruction: str = Field(..., min_length=1, max_length=4000)
-    workspace_id: str
+    workspace_id: UUID
     skill: str | None = Field(None, max_length=64)
 
 

@@ -10,7 +10,7 @@ async def test_data_routes_require_auth(client: AsyncClient) -> None:
     assert (
         await client.post("/api/chat/stream", json={"message": "hi"})
     ).status_code == 401
-    assert (await client.get("/api/agent/tasks")).status_code == 401
+    assert (await client.get("/api/agents/runs")).status_code == 401
 
 
 async def test_viewer_can_read_workspaces(viewer_client: AsyncClient) -> None:
