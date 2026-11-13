@@ -1,6 +1,7 @@
 """Tests for conversion endpoints and the conversion job."""
 
 import io
+import json
 import uuid
 import zipfile
 from pathlib import Path
@@ -72,6 +73,60 @@ async def test_conversion_flow(
     assert archive.status_code == 200
     with zipfile.ZipFile(io.BytesIO(archive.content)) as bundle:
         assert "document.md" in bundle.namelist()
+
+
+async def test_json_and_markdown_formats(
+    member_client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    workspace = await _create_workspace(db_session)
+    document_id = await _upload(member_client, workspace.id)
+
+    start = await member_client.post(
+        f"/api/documents/{document_id}/convert",
+        json={"format": "both", "include_images": False},
+    )
+    assert start.status_code == 202
+    assert start.json()["format"] == "both"
+
+    await process_conversion(db_session, {"conversion_id": start.json()["id"]})
+
+    json_response = await member_client.get(f"/api/documents/{document_id}/json")
+    assert json_response.status_code == 200
+    payload = json.loads(json_response.text)
+    assert payload["filename"] == "notes.txt"
+    assert "hello conversion" in payload["markdown"]
+    assert payload["blocks"]
+
+    markdown = await member_client.get(f"/api/documents/{document_id}/markdown")
+    assert markdown.status_code == 200
+
+    archive = await member_client.get(f"/api/documents/{document_id}/markdown.zip")
+    with zipfile.ZipFile(io.BytesIO(archive.content)) as bundle:
+        assert {"document.md", "document.json"} <= set(bundle.namelist())
+
+
+async def test_json_only_rejects_markdown_download(
+    member_client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    workspace = await _create_workspace(db_session)
+    document_id = await _upload(member_client, workspace.id)
+
+    start = await member_client.post(
+        f"/api/documents/{document_id}/convert",
+        json={"format": "json", "include_images": False},
+    )
+    await process_conversion(db_session, {"conversion_id": start.json()["id"]})
+
+    response = await member_client.get(f"/api/documents/{document_id}/markdown")
+    assert response.status_code == 409
 
 
 async def test_download_before_conversion_returns_404(

@@ -4,6 +4,7 @@ AI Workspace API — Local Markdown Conversion
 Converts PDF and DOCX documents to Markdown without AI services.
 """
 
+import json
 import re
 from dataclasses import dataclass
 from io import BytesIO
@@ -27,6 +28,7 @@ _IMAGE_EXTENSIONS = {
     "image/tiff": ".tiff",
 }
 _DATA_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(data:[^)]+\)")
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((assets/[^)]+)\)")
 
 
 @dataclass(frozen=True)
@@ -132,3 +134,30 @@ def _convert_docx(
         markdown = _DATA_IMAGE_RE.sub("", markdown)
 
     return ConversionOutput(markdown.strip(), image_count)
+
+
+def render_json(filename: str, markdown: str, image_count: int) -> str:
+    """Render a deterministic JSON representation of converted content."""
+    images = _MARKDOWN_IMAGE_RE.findall(markdown)
+    blocks: list[dict[str, str]] = []
+    for chunk in markdown.split("\n\n"):
+        text = chunk.strip()
+        if not text:
+            continue
+        if text.startswith("#"):
+            block_type = "heading"
+        elif text.startswith("!["):
+            block_type = "image"
+        else:
+            block_type = "paragraph"
+        blocks.append({"type": block_type, "text": text})
+
+    payload = {
+        "filename": filename,
+        "source_format": Path(filename).suffix.lower().lstrip("."),
+        "image_count": image_count,
+        "images": images,
+        "blocks": blocks,
+        "markdown": markdown,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)

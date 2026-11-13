@@ -329,9 +329,11 @@ class DocumentConversion(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", index=True
     )
+    format: Mapped[str] = mapped_column(String(20), nullable=False, default="markdown")
     include_images: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     markdown_path: Mapped[str | None] = mapped_column(String(500))
+    json_path: Mapped[str | None] = mapped_column(String(500))
     assets_path: Mapped[str | None] = mapped_column(String(500))
     error: Mapped[str | None] = mapped_column(Text)
 

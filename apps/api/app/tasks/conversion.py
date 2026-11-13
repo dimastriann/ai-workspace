@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Document, DocumentConversion
-from app.services.markdown_converter import convert_document
+from app.services.markdown_converter import convert_document, render_json
 from app.services.storage import conversion_dir, document_file_path, remove_tree
 
 
@@ -41,12 +41,26 @@ async def process_conversion(db: AsyncSession, payload: dict[str, Any]) -> None:
         )
 
         markdown_path = output_dir / "document.md"
-        await asyncio.to_thread(
-            markdown_path.write_text, result.markdown, encoding="utf-8"
+        json_path = output_dir / "document.json"
+        formats = (
+            {"markdown", "json"} if conversion.format == "both" else {conversion.format}
         )
 
+        if "markdown" in formats:
+            await asyncio.to_thread(
+                markdown_path.write_text, result.markdown, encoding="utf-8"
+            )
+        if "json" in formats:
+            json_payload = render_json(
+                document.filename, result.markdown, result.image_count
+            )
+            await asyncio.to_thread(
+                json_path.write_text, json_payload, encoding="utf-8"
+            )
+
         conversion.status = "completed"
-        conversion.markdown_path = str(markdown_path)
+        conversion.markdown_path = str(markdown_path) if "markdown" in formats else None
+        conversion.json_path = str(json_path) if "json" in formats else None
         conversion.assets_path = (
             str(output_dir / "assets") if conversion.include_images else None
         )

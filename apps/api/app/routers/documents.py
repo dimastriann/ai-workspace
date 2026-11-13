@@ -57,6 +57,7 @@ def _conversion_response(conversion: DocumentConversion) -> ConversionResponse:
         id=str(conversion.id),
         document_id=str(conversion.document_id),
         status=conversion.status,
+        format=conversion.format,
         include_images=conversion.include_images,
         error=conversion.error,
         created_at=conversion.created_at,
@@ -110,22 +111,30 @@ async def _completed_conversion(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found"
         )
-    if conversion.status != "completed" or not conversion.markdown_path:
+    if conversion.status != "completed":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Conversion not ready"
         )
+    return document, conversion
 
+
+def _conversion_file(path: str | None) -> Path:
+    if not path:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conversion format not available",
+        )
     try:
-        ensure_within_uploads(Path(conversion.markdown_path))
+        resolved = ensure_within_uploads(Path(path))
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversion output missing"
         ) from exc
-    if not Path(conversion.markdown_path).is_file():
+    if not resolved.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversion output missing"
         )
-    return document, conversion
+    return resolved
 
 
 @router.post("/upload/{workspace_id}", response_model=DocumentUploadResponse)
@@ -257,7 +266,7 @@ async def convert_document(
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_member),
 ) -> ConversionResponse:
-    """Queue a Markdown conversion for a document."""
+    """Queue a document conversion."""
     document = await db.get(Document, document_id)
     if document is None:
         raise HTTPException(
@@ -267,6 +276,7 @@ async def convert_document(
     conversion = DocumentConversion(
         document_id=document.id,
         status="pending",
+        format=data.format,
         include_images=data.include_images,
     )
     db.add(conversion)
@@ -284,6 +294,7 @@ async def convert_document(
         actor_id=user.id,
         target=str(document_id),
         details={
+            "format": data.format,
             "include_images": data.include_images,
             "conversion_id": str(conversion.id),
         },
@@ -315,12 +326,27 @@ async def download_markdown(
 ) -> FileResponse:
     """Download the converted Markdown file."""
     document, conversion = await _completed_conversion(document_id, db)
-    markdown_path = conversion.markdown_path
-    assert markdown_path is not None
+    markdown_path = _conversion_file(conversion.markdown_path)
     return FileResponse(
         markdown_path,
         media_type="text/markdown",
         filename=f"{_download_stem(document.filename)}.md",
+    )
+
+
+@router.get("/{document_id}/json")
+async def download_json(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_viewer),
+) -> FileResponse:
+    """Download the converted JSON file."""
+    document, conversion = await _completed_conversion(document_id, db)
+    json_path = _conversion_file(conversion.json_path)
+    return FileResponse(
+        json_path,
+        media_type="application/json",
+        filename=f"{_download_stem(document.filename)}.json",
     )
 
 
@@ -332,12 +358,18 @@ async def download_markdown_zip(
 ) -> Response:
     """Download the Markdown file plus extracted images as a ZIP."""
     document, conversion = await _completed_conversion(document_id, db)
-    markdown_path = conversion.markdown_path
-    assert markdown_path is not None
+    markdown_path = _conversion_file(conversion.markdown_path)
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(markdown_path, "document.md")
+        if conversion.json_path:
+            try:
+                json_path = ensure_within_uploads(Path(conversion.json_path))
+            except ValueError:
+                json_path = None
+            if json_path is not None and json_path.is_file():
+                archive.write(json_path, "document.json")
         if conversion.assets_path:
             try:
                 assets = ensure_within_uploads(Path(conversion.assets_path))
