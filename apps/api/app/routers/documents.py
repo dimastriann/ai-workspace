@@ -5,17 +5,25 @@ Endpoints for uploading, listing, and managing documents.
 Integrates with DocumentService for business logic and the job queue for ingestion.
 """
 
+import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
+from app.core.errors import (
+    FileTooLargeError,
+    UnsupportedFileTypeError,
+    WorkspaceNotFoundError,
+)
 from app.dependencies import require_member, require_viewer
 from app.models.database import User
 from app.models.document import DocumentMetadata, DocumentUploadResponse
 from app.services.document_service import document_service
 from app.services.document_types import detect_document_type
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,8 +48,26 @@ async def upload_document(
             chunk_count=0,  # Initially zero, updated by worker
             message="Document upload successful. Ingestion started.",
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    except UnsupportedFileTypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+        ) from exc
+    except FileTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+        ) from exc
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Document upload failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Upload failed",
+        ) from exc
 
 
 @router.get("/{workspace_id}", response_model=list[DocumentMetadata])

@@ -70,6 +70,21 @@ class Settings(BaseSettings):
     rate_limit_auth: int = 10
     rate_limit_upload: int = 20
 
+    # ── Uploads ──────────────────────────────────────────────────────────
+    max_upload_mb: int = 25
+    allowed_upload_extensions: str = (
+        "pdf,md,markdown,csv,txt,json,yaml,yml,py,js,jsx,ts,tsx,rs,go,java"
+    )
+
+    @property
+    def allowed_upload_extension_set(self) -> set[str]:
+        """Normalized set of allowed upload extensions."""
+        return {
+            item.strip().lower().lstrip(".")
+            for item in self.allowed_upload_extensions.split(",")
+            if item.strip()
+        }
+
     @property
     def json_logs(self) -> bool:
         """Use JSON logs in production unless explicitly disabled."""
