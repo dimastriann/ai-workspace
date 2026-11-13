@@ -2,7 +2,8 @@
 
 import { type DragEvent, useRef, useState } from "react";
 
-import { Button, Card, Modal } from "@/components/ui";
+import { Button, Card, Modal, Switch } from "@/components/ui";
+import { useConversion, useConvertDocument } from "@/lib/queries/conversions";
 import { useDeleteDocument, useDocuments, useUploadDocument } from "@/lib/queries/documents";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 import type { DocumentRecord } from "@/lib/types";
@@ -42,12 +43,18 @@ export default function DocumentsPage() {
   const { data: documents = [], isLoading } = useDocuments(workspaceId);
   const upload = useUploadDocument(workspaceId);
   const removeDocument = useDeleteDocument(workspaceId);
+  const startConversion = useConvertDocument();
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<UploadStatus | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingConversion, setPendingConversion] = useState<DocumentRecord | null>(null);
+  const [includeImages, setIncludeImages] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const conversionQuery = useConversion(pendingConversion?.id ?? null, Boolean(pendingConversion));
+  const latestConversion = conversionQuery.data;
 
   async function handleFile(file: File) {
     setStatus(null);
@@ -78,6 +85,33 @@ export default function DocumentsPage() {
       setPendingDelete(null);
     } catch {
       setDeleteError("Failed to delete document.");
+    }
+  }
+
+  function openConversion(document: DocumentRecord) {
+    setPendingConversion(document);
+    setIncludeImages(false);
+    setConvertError(null);
+  }
+
+  function closeConversion() {
+    setPendingConversion(null);
+    setIncludeImages(false);
+    setConvertError(null);
+  }
+
+  async function handleConvert() {
+    if (!pendingConversion) {
+      return;
+    }
+    setConvertError(null);
+    try {
+      await startConversion.mutateAsync({
+        documentId: pendingConversion.id,
+        includeImages,
+      });
+    } catch {
+      setConvertError("Failed to start conversion.");
     }
   }
 
@@ -187,13 +221,22 @@ export default function DocumentsPage() {
                       </td>
                       <td>{formatDate(document.created_at)}</td>
                       <td>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setPendingDelete(document)}
-                        >
-                          Delete
-                        </Button>
+                        <div className={styles.actions}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => openConversion(document)}
+                          >
+                            Convert
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setPendingDelete(document)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -227,6 +270,85 @@ export default function DocumentsPage() {
           file.
         </p>
         {deleteError ? <p className={styles.error}>{deleteError}</p> : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingConversion)}
+        onClose={closeConversion}
+        title="Convert to Markdown"
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeConversion}>
+              Close
+            </Button>
+            {!conversionQuery.isLoading &&
+            (!latestConversion || latestConversion.status === "error") ? (
+              <Button
+                variant="primary"
+                loading={startConversion.isPending}
+                onClick={handleConvert}
+                disabled={!pendingConversion}
+              >
+                Convert
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        <p>
+          Convert <strong>{pendingConversion?.filename}</strong> to Markdown.
+        </p>
+
+        {conversionQuery.isLoading ? (
+          <p className={styles.muted}>Checking conversion…</p>
+        ) : latestConversion ? (
+          <div className={styles.conversionPanel}>
+            <div className={styles.conversionRow}>
+              <span>Status</span>
+              <span className={`${styles.statusBadge} ${statusClass(latestConversion.status)}`}>
+                {latestConversion.status}
+              </span>
+            </div>
+
+            {latestConversion.status === "completed" && pendingConversion ? (
+              <div className={styles.downloads}>
+                <a
+                  className={styles.download}
+                  href={`/api/documents/${pendingConversion.id}/markdown`}
+                >
+                  Download .md
+                </a>
+                {latestConversion.include_images ? (
+                  <a
+                    className={styles.download}
+                    href={`/api/documents/${pendingConversion.id}/markdown-zip`}
+                  >
+                    Download .zip (with images)
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+
+            {latestConversion.status === "pending" || latestConversion.status === "running" ? (
+              <p className={styles.muted}>Processing… this can take a few seconds.</p>
+            ) : null}
+
+            {latestConversion.status === "error" ? (
+              <p className={styles.error}>{latestConversion.error ?? "Conversion failed."}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className={styles.switchRow}>
+            <span>Include images</span>
+            <Switch
+              checked={includeImages}
+              onChange={setIncludeImages}
+              label="Include images in the Markdown output"
+            />
+          </div>
+        )}
+
+        {convertError ? <p className={styles.error}>{convertError}</p> : null}
       </Modal>
     </div>
   );

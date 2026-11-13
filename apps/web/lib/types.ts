@@ -83,3 +83,13 @@ export interface AgentRunDetail extends AgentRunSummary {
   error: string | null;
   steps: AgentStep[];
 }
+
+export interface Conversion {
+  id: string;
+  document_id: string;
+  status: string;
+  include_images: boolean;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}

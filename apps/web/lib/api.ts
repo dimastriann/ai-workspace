@@ -110,3 +110,23 @@ export async function proxyWithCookies(
 
   return new Response(body, { status: response.status, headers });
 }
+
+const FILE_HEADERS = ["content-type", "content-disposition", "content-length"];
+
+export async function proxyFile(path: string, request: Request): Promise<Response> {
+  const cookie = request.headers.get("cookie");
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    cache: "no-store",
+    headers: cookie ? { cookie } : {},
+  });
+
+  const headers = new Headers();
+  for (const name of FILE_HEADERS) {
+    const value = response.headers.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  }
+
+  return new Response(response.body, { status: response.status, headers });
+}
