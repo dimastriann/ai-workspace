@@ -149,7 +149,7 @@ export function AppSidebar() {
       ) : null}
       <aside
         id="app-sidebar"
-        className={`${styles.sidebar} ${sidebarOpen ? styles.open : ""} glass`}
+        className={`${styles.sidebar} ${sidebarOpen ? styles.open : ""} glass dark-chrome`}
       >
         <nav className={styles.nav}>
           {items.map((item) => (

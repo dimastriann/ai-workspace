@@ -12,7 +12,7 @@ export function AppHeader() {
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
 
   return (
-    <header className={`${styles.header} glass`}>
+    <header className={`${styles.header} glass dark-chrome`}>
       <div className={styles.left}>
         <button
           type="button"

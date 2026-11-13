@@ -170,6 +170,22 @@ body {
   border: 1px solid var(--color-border);
 }
 
+/* Persistent dark chrome for the app header and sidebar. */
+.dark-chrome {
+  --color-bg-glass: rgba(15, 23, 42, 0.92);
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+  --color-border-light: #475569;
+  --color-primary-soft: rgba(99, 102, 241, 0.15);
+  --color-primary-border: rgba(99, 102, 241, 0.2);
+  --color-secondary-soft: rgba(6, 182, 212, 0.1);
+}
+
 .gradient-text {
   background: linear-gradient(135deg, var(--color-primary-light), var(--color-secondary));
   -webkit-background-clip: text;

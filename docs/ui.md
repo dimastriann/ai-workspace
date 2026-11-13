@@ -18,6 +18,8 @@ responsive as the app grows.
   is stored in `localStorage.theme`.
 - A pre-paint script sets `data-theme` and `color-scheme` on `<html>` to avoid a flash;
   the toggle keeps them in sync and follows OS changes while in system mode.
+- The app header and sidebar intentionally keep **dark chrome** in both themes via the
+  `.dark-chrome` utility; page content follows the selected theme.
 - Never hard-code white/black surfaces in new components; use the token palette.
 - Verify new UI in both themes, not only the default dark theme.
 
