@@ -99,18 +99,18 @@
 }
 
 .running {
-  background: rgba(245, 158, 11, 0.15);
+  background: var(--color-warning-soft);
   color: var(--color-warning);
 }
 
 .completed {
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--color-success-soft);
   color: var(--color-success);
 }
 
 .error,
 .failed {
-  background: rgba(239, 68, 68, 0.15);
+  background: var(--color-error-soft);
   color: var(--color-error);
 }
 
@@ -185,7 +185,7 @@
   margin: 10px 0 0;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-soft);
   color: var(--color-error);
   font-size: 0.85rem;
 }

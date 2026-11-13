@@ -67,7 +67,7 @@
   color: white;
 }
 .variant-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--color-error);
   transform: translateY(-1px);
 }
 

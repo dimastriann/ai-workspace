@@ -20,6 +20,22 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var pref = localStorage.getItem("theme") || "system";
+                  var light = window.matchMedia("(prefers-color-scheme: light)").matches;
+                  var theme = pref === "system" ? (light ? "light" : "dark") : pref;
+                  document.documentElement.dataset.theme = theme;
+                  document.documentElement.style.colorScheme = theme;
+                } catch (error) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body>
         <Providers>{children}</Providers>

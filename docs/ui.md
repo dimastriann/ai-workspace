@@ -7,8 +7,19 @@ responsive as the app grows.
 
 - Use the CSS variables in `apps/web/app/globals.css` for color, spacing, radii, shadows,
   and transitions. Do not hard-code brand colors.
-- Translucent overlays and tinted status backgrounds may use `rgba(...)` matching a token.
+- Dark tokens live on `:root`; light tokens override them on `:root[data-theme="light"]`.
+  Tinted surfaces, overlays, status backgrounds, and glass use semantic tokens so both
+  themes stay correct.
 - Prefer `var(--transition-fast)` for hover/focus and `var(--transition-normal)` for layout.
+
+## Theme
+
+- Users can choose **system**, **light**, or **dark** from the header toggle. The preference
+  is stored in `localStorage.theme`.
+- A pre-paint script sets `data-theme` and `color-scheme` on `<html>` to avoid a flash;
+  the toggle keeps them in sync and follows OS changes while in system mode.
+- Never hard-code white/black surfaces in new components; use the token palette.
+- Verify new UI in both themes, not only the default dark theme.
 
 ## Layout and breakpoints
 
@@ -49,7 +60,8 @@ responsive as the app grows.
 
 ## Verification
 
-Before closing a UI change, check the main flow at **360px, 768px, and 1280px** and run:
+Before closing a UI change, check the main flow at **360px, 768px, and 1280px** in both
+light and dark themes, then run:
 
 ```bash
 pnpm lint

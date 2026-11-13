@@ -41,13 +41,13 @@
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
   padding: 40px 20px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-tint);
 }
 
 .dropZone:hover:not(:disabled),
 .dragging {
   border-color: var(--color-primary);
-  background: rgba(99, 102, 241, 0.05);
+  background: var(--color-primary-softer);
 }
 
 .dropContent {
@@ -83,12 +83,12 @@
 }
 
 .status.success {
-  background: rgba(16, 185, 129, 0.1);
+  background: var(--color-success-soft);
   color: var(--color-success);
 }
 
 .status.error {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-soft);
   color: var(--color-error);
 }
 
@@ -149,7 +149,7 @@
 .spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid var(--color-spinner-track);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -169,17 +169,17 @@
 }
 
 .statusProcessing {
-  background: rgba(245, 158, 11, 0.12);
+  background: var(--color-warning-soft);
   color: var(--color-warning);
 }
 
 .statusCompleted {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--color-success-soft);
   color: var(--color-success);
 }
 
 .statusError {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--color-error-soft);
   color: var(--color-error);
 }
 
@@ -187,15 +187,9 @@
   margin: 12px 0 0;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-soft);
   color: var(--color-error);
   font-size: 0.85rem;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .switchRow {

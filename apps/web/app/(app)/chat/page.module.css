@@ -141,7 +141,7 @@
   margin-top: auto;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-soft);
   color: var(--color-error);
   font-size: 0.85rem;
 }

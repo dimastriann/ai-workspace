@@ -43,9 +43,9 @@
 }
 
 .navItem.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(6, 182, 212, 0.1));
+  background: linear-gradient(135deg, var(--color-primary-soft), var(--color-secondary-soft));
   color: var(--color-primary-light);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid var(--color-primary-border);
 }
 
 .navIcon {
@@ -120,7 +120,7 @@
   z-index: 89;
   border: none;
   padding: 0;
-  background: rgba(2, 6, 23, 0.6);
+  background: var(--color-overlay);
   cursor: pointer;
 }
 

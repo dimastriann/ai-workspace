@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useUiStore } from "@/lib/stores/ui";
 
 import styles from "./app-header.module.css";
+import { ThemeToggle } from "./theme-toggle";
 
 export function AppHeader() {
   const sidebarOpen = useUiStore((state) => state.sidebarOpen);
@@ -64,6 +65,7 @@ export function AppHeader() {
       </div>
 
       <div className={styles.right}>
+        <ThemeToggle />
         <div className={styles.status}>
           <span className={`${styles.statusDot} pulse-dot`} aria-hidden="true" />
           <span>Connected</span>
