@@ -15,3 +15,7 @@ class FileTooLargeError(UploadError):
 
 class WorkspaceNotFoundError(UploadError):
     """The target workspace does not exist."""
+
+
+class DocumentNotFoundError(Exception):
+    """The requested document does not exist."""

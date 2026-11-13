@@ -8,11 +8,21 @@ Integrates with DocumentService for business logic and the job queue for ingesti
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
 from app.core.errors import (
+    DocumentNotFoundError,
     FileTooLargeError,
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
@@ -20,6 +30,7 @@ from app.core.errors import (
 from app.dependencies import require_member, require_viewer
 from app.models.database import User
 from app.models.document import DocumentMetadata, DocumentUploadResponse
+from app.services.audit_service import audit_service
 from app.services.document_service import document_service
 from app.services.document_types import detect_document_type
 
@@ -54,7 +65,7 @@ async def upload_document(
         ) from exc
     except FileTooLargeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
         ) from exc
     except WorkspaceNotFoundError as exc:
         raise HTTPException(
@@ -92,3 +103,29 @@ async def list_documents(
         )
         for d in docs
     ]
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+) -> Response:
+    """Delete a document, its chunks, and its stored files."""
+    try:
+        document = await document_service.delete_document(document_id, db)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    await audit_service.record(
+        db,
+        action="documents.delete",
+        actor_id=user.id,
+        target=str(document_id),
+        details={"filename": document.filename},
+        ip=request.client.host if request.client else None,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
