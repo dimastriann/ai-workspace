@@ -5,7 +5,11 @@ Endpoints for uploading, listing, and managing documents.
 Integrates with DocumentService for business logic and the job queue for ingestion.
 """
 
+import io
 import logging
+import re
+import zipfile
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import (
@@ -18,6 +22,8 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -28,15 +34,79 @@ from app.core.errors import (
     WorkspaceNotFoundError,
 )
 from app.dependencies import require_member, require_viewer
-from app.models.database import User
+from app.models.conversion import ConversionRequest, ConversionResponse
+from app.models.database import Document, DocumentConversion, User
 from app.models.document import DocumentMetadata, DocumentUploadResponse
 from app.services.audit_service import audit_service
 from app.services.document_service import document_service
 from app.services.document_types import detect_document_type
+from app.services.job_service import job_service
+from app.services.storage import ensure_within_uploads
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _conversion_response(conversion: DocumentConversion) -> ConversionResponse:
+    return ConversionResponse(
+        id=str(conversion.id),
+        document_id=str(conversion.document_id),
+        status=conversion.status,
+        include_images=conversion.include_images,
+        error=conversion.error,
+        created_at=conversion.created_at,
+        updated_at=conversion.updated_at,
+    )
+
+
+def _download_stem(filename: str) -> str:
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(filename).stem)
+    return stem or "document"
+
+
+async def _latest_conversion(
+    document_id: UUID, db: AsyncSession
+) -> DocumentConversion | None:
+    result = await db.execute(
+        select(DocumentConversion)
+        .where(DocumentConversion.document_id == document_id)
+        .order_by(DocumentConversion.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _completed_conversion(
+    document_id: UUID, db: AsyncSession
+) -> tuple[Document, DocumentConversion]:
+    document = await db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    conversion = await _latest_conversion(document_id, db)
+    if conversion is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found"
+        )
+    if conversion.status != "completed" or not conversion.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Conversion not ready"
+        )
+
+    try:
+        ensure_within_uploads(Path(conversion.markdown_path))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversion output missing"
+        ) from exc
+    if not Path(conversion.markdown_path).is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversion output missing"
+        )
+    return document, conversion
 
 
 @router.post("/upload/{workspace_id}", response_model=DocumentUploadResponse)
@@ -129,3 +199,115 @@ async def delete_document(
         ip=request.client.host if request.client else None,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{document_id}/convert",
+    response_model=ConversionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def convert_document(
+    document_id: UUID,
+    data: ConversionRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+) -> ConversionResponse:
+    """Queue a Markdown conversion for a document."""
+    document = await db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    conversion = DocumentConversion(
+        document_id=document.id,
+        status="pending",
+        include_images=data.include_images,
+    )
+    db.add(conversion)
+    await db.commit()
+    await db.refresh(conversion)
+
+    await job_service.enqueue(
+        db,
+        kind="document.convert",
+        payload={"conversion_id": str(conversion.id)},
+    )
+    await audit_service.record(
+        db,
+        action="documents.convert",
+        actor_id=user.id,
+        target=str(document_id),
+        details={
+            "include_images": data.include_images,
+            "conversion_id": str(conversion.id),
+        },
+        ip=request.client.host if request.client else None,
+    )
+    return _conversion_response(conversion)
+
+
+@router.get("/{document_id}/conversion", response_model=ConversionResponse)
+async def get_conversion(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_viewer),
+) -> ConversionResponse:
+    """Return the latest conversion for a document."""
+    conversion = await _latest_conversion(document_id, db)
+    if conversion is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found"
+        )
+    return _conversion_response(conversion)
+
+
+@router.get("/{document_id}/markdown")
+async def download_markdown(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_viewer),
+) -> FileResponse:
+    """Download the converted Markdown file."""
+    document, conversion = await _completed_conversion(document_id, db)
+    markdown_path = conversion.markdown_path
+    assert markdown_path is not None
+    return FileResponse(
+        markdown_path,
+        media_type="text/markdown",
+        filename=f"{_download_stem(document.filename)}.md",
+    )
+
+
+@router.get("/{document_id}/markdown.zip")
+async def download_markdown_zip(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_viewer),
+) -> Response:
+    """Download the Markdown file plus extracted images as a ZIP."""
+    document, conversion = await _completed_conversion(document_id, db)
+    markdown_path = conversion.markdown_path
+    assert markdown_path is not None
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(markdown_path, "document.md")
+        if conversion.assets_path:
+            try:
+                assets = ensure_within_uploads(Path(conversion.assets_path))
+            except ValueError:
+                assets = None
+            if assets is not None and assets.is_dir():
+                for file_path in assets.rglob("*"):
+                    if file_path.is_file():
+                        relative = file_path.relative_to(assets).as_posix()
+                        archive.write(file_path, f"assets/{relative}")
+
+    filename = f"{_download_stem(document.filename)}.zip"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"content-disposition": f'attachment; filename="{filename}"'},
+    )

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.database import async_session
 from app.services.job_service import job_service
+from app.tasks.conversion import process_conversion
 from app.tasks.ingestion import process_document
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ Handler = Callable[[AsyncSession, dict[str, Any]], Awaitable[None]]
 
 HANDLERS: dict[str, Handler] = {
     "document.ingest": process_document,
+    "document.convert": process_conversion,
 }
 
 
