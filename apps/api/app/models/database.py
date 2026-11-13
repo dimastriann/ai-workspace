@@ -277,3 +277,66 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class AgentRun(Base):
+    """
+    A single agent execution.
+    """
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+
+    skill: Mapped[str | None] = mapped_column(String(64))
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
+    )
+    result: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+    steps: Mapped[list["AgentStep"]] = relationship(
+        "AgentStep",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="AgentStep.ordinal",
+    )
+
+
+class AgentStep(Base):
+    """
+    A persisted step (typically a tool call) of an agent run.
+    """
+
+    __tablename__ = "agent_steps"
+    __table_args__ = (
+        UniqueConstraint("run_id", "ordinal", name="uq_agent_steps_run_ordinal"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_runs.id"), nullable=False, index=True
+    )
+
+    ordinal: Mapped[int] = mapped_column(nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    tool_name: Mapped[str | None] = mapped_column(String(64))
+    input: Mapped[str | None] = mapped_column(Text)
+    output: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    run: Mapped["AgentRun"] = relationship("AgentRun", back_populates="steps")

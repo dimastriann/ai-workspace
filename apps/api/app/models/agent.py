@@ -1,53 +1,46 @@
 """
 AI Workspace API — Agent Models
 
-Pydantic schemas for agent task requests, execution steps, and results.
+Pydantic schemas for agent runs, steps, and responses.
 """
 
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class TaskStatus(StrEnum):
-    """Agent task execution status."""
+class AgentRunRequest(BaseModel):
+    """Request body for starting an agent run."""
 
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class AgentTaskRequest(BaseModel):
-    """Request body for submitting an agent task."""
-
-    instruction: str = Field(
-        ..., min_length=1, description="The task instruction for the agent"
-    )
-    workspace_id: str | None = Field(None, description="Workspace context")
-    tools: list[str] = Field(
-        default_factory=list, description="Optional list of tools to enable"
-    )
+    instruction: str = Field(..., min_length=1, max_length=4000)
+    workspace_id: str
+    skill: str | None = Field(None, max_length=64)
 
 
-class AgentStep(BaseModel):
-    """A single step in the agent's execution plan."""
+class AgentStepResponse(BaseModel):
+    """A single persisted step of an agent run."""
 
-    step_number: int
-    action: str
-    tool_used: str | None = None
-    input_data: str = ""
-    output_data: str = ""
-    status: TaskStatus = TaskStatus.PENDING
+    ordinal: int
+    kind: str
+    tool_name: str | None = None
+    input: str | None = None
+    output: str | None = None
+    status: str
 
 
-class AgentTaskResponse(BaseModel):
-    """Response from an agent task execution."""
+class AgentRunSummary(BaseModel):
+    """Summary of an agent run."""
 
-    task_id: str
+    id: str
     instruction: str
-    status: TaskStatus
-    steps: list[AgentStep] = Field(default_factory=list)
+    skill: str | None = None
+    status: str
+    created_at: datetime
+
+
+class AgentRunDetail(AgentRunSummary):
+    """Full agent run with steps and result."""
+
     result: str | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
+    error: str | None = None
+    steps: list[AgentStepResponse] = Field(default_factory=list)
