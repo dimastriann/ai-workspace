@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Select, Switch } from "@/components/ui";
 import { useMe } from "@/lib/queries/auth";
 import { useCreateUser, useUpdateUser, useUsers } from "@/lib/queries/users";
 import type { Role } from "@/lib/types";
@@ -10,6 +10,10 @@ import type { Role } from "@/lib/types";
 import styles from "./page.module.css";
 
 const ROLES: Role[] = ["viewer", "member", "admin"];
+const ROLE_OPTIONS = ROLES.map((role) => ({
+  value: role,
+  label: role[0].toUpperCase() + role.slice(1),
+}));
 
 export default function UsersPage() {
   const { data: me } = useMe();
@@ -76,20 +80,15 @@ export default function UsersPage() {
               />
             </label>
 
-            <label className={styles.field}>
+            <div className={styles.field}>
               <span>Role</span>
-              <select
+              <Select
+                label="Role"
                 value={role}
                 onChange={(event) => setRole(event.target.value as Role)}
-                className={styles.input}
-              >
-                {ROLES.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={ROLE_OPTIONS}
+              />
+            </div>
 
             {error ? <p className={styles.error}>{error}</p> : null}
 
@@ -113,10 +112,10 @@ export default function UsersPage() {
               <tbody>
                 {(users ?? []).map((user) => (
                   <tr key={user.id}>
-                    <td>{user.email}</td>
-                    <td>
-                      <select
-                        className={styles.select}
+                    <td data-label="Email">{user.email}</td>
+                    <td data-label="Role">
+                      <Select
+                        label={`Role for ${user.email}`}
                         value={user.role}
                         onChange={(event) =>
                           updateUser.mutate({
@@ -124,22 +123,17 @@ export default function UsersPage() {
                             role: event.target.value as Role,
                           })
                         }
-                      >
-                        {ROLES.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                        options={ROLE_OPTIONS}
+                      />
                     </td>
-                    <td>
-                      <input
-                        type="checkbox"
+                    <td data-label="Active">
+                      <Switch
+                        label={`Active for ${user.email}`}
                         checked={user.is_active}
-                        onChange={(event) =>
+                        onChange={(checked) =>
                           updateUser.mutate({
                             id: user.id,
-                            is_active: event.target.checked,
+                            is_active: checked,
                           })
                         }
                       />

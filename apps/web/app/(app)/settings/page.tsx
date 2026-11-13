@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Switch } from "@/components/ui";
 import { useMe } from "@/lib/queries/auth";
 import { useSettings, useUpdateSetting } from "@/lib/queries/settings";
 import type { SettingValue } from "@/lib/types";
@@ -24,14 +24,14 @@ function SettingRow({ name, value }: { name: string; value: SettingValue }) {
     return (
       <div className={styles.row}>
         <code className={styles.label}>{name}</code>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
+        <div className={styles.toggle}>
+          <Switch
             checked={value}
-            onChange={(event) => update.mutate({ key: name, value: event.target.checked })}
+            label={name}
+            onChange={(checked) => update.mutate({ key: name, value: checked })}
           />
           <span>{value ? "Enabled" : "Disabled"}</span>
-        </label>
+        </div>
       </div>
     );
   }

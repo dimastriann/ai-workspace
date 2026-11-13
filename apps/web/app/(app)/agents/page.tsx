@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Select } from "@/components/ui";
 import { useAgentStream } from "@/lib/hooks/use-agent-stream";
 import { agentKeys, useAgentRuns, useSkills } from "@/lib/queries/agents";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
@@ -58,22 +58,22 @@ export default function AgentsPage() {
               disabled={busy}
             />
 
-            <label className={styles.field}>
+            <div className={styles.field}>
               <span>Skill</span>
-              <select
-                className={styles.select}
+              <Select
+                label="Skill"
                 value={skill}
                 onChange={(event) => setSkill(event.target.value)}
                 disabled={busy}
-              >
-                <option value="">Default (search + calculator)</option>
-                {skills.map((item) => (
-                  <option key={item.name} value={item.name}>
-                    {item.name} — {item.description}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={[
+                  { value: "", label: "Default (search + calculator)" },
+                  ...skills.map((item) => ({
+                    value: item.name,
+                    label: `${item.name} — ${item.description}`,
+                  })),
+                ]}
+              />
+            </div>
 
             {!workspaceId ? <p className={styles.hint}>Select a workspace first.</p> : null}
 
