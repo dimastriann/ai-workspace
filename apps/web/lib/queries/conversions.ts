@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { Conversion } from "@/lib/types";
+import type { Conversion, ConversionFormat } from "@/lib/types";
 
 export const conversionKeys = {
   byDocument: (documentId: string) => ["conversion", documentId] as const,
@@ -39,14 +39,16 @@ export function useConvertDocument() {
     mutationFn: async ({
       documentId,
       includeImages,
+      format = "markdown",
     }: {
       documentId: string;
       includeImages: boolean;
+      format?: ConversionFormat;
     }) => {
       const response = await fetch(`/api/documents/${documentId}/convert`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ include_images: includeImages }),
+        body: JSON.stringify({ format, include_images: includeImages }),
       });
       if (!response.ok) {
         throw new Error("Failed to start conversion");

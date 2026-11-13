@@ -98,12 +98,23 @@ export interface AgentRunDetail extends AgentRunSummary {
   steps: AgentStep[];
 }
 
+export type ConversionFormat = "markdown" | "json" | "both";
+
 export interface Conversion {
   id: string;
   document_id: string;
   status: string;
+  format: ConversionFormat;
   include_images: boolean;
   error: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DocumentUploadResult {
+  document_id: string;
+  filename: string;
+  document_type: string;
+  chunk_count: number;
+  message: string;
 }

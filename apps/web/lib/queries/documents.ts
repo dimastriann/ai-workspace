@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { DocumentRecord } from "@/lib/types";
+import type { DocumentRecord, DocumentUploadResult } from "@/lib/types";
 
 export const documentKeys = {
   byWorkspace: (workspaceId: string) => ["documents", workspaceId] as const,
@@ -70,7 +70,7 @@ export function useUploadDocument(workspaceId: string | null) {
         throw new Error("Upload failed");
       }
 
-      return response.json();
+      return (await response.json()) as DocumentUploadResult;
     },
     onSuccess: () => {
       if (workspaceId) {
@@ -95,7 +95,7 @@ export function useMoveDocument(workspaceId: string | null) {
       if (!response.ok) {
         throw new Error("Failed to move document");
       }
-      return response.json();
+      return (await response.json()) as DocumentRecord;
     },
     onSuccess: () => {
       if (workspaceId) {

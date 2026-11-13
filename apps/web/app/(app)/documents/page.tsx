@@ -18,7 +18,7 @@ import {
   useUpdateFolder,
 } from "@/lib/queries/folders";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
-import type { DocumentRecord, FolderTree } from "@/lib/types";
+import type { ConversionFormat, DocumentRecord, FolderTree } from "@/lib/types";
 
 import styles from "./page.module.css";
 
@@ -103,7 +103,12 @@ export default function DocumentsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingConversion, setPendingConversion] = useState<DocumentRecord | null>(null);
   const [includeImages, setIncludeImages] = useState(false);
+  const [convertFormat, setConvertFormat] = useState<ConversionFormat>("markdown");
   const [convertError, setConvertError] = useState<string | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<File | null>(null);
+  const [uploadFormat, setUploadFormat] = useState<"none" | ConversionFormat>("none");
+  const [uploadIncludeImages, setUploadIncludeImages] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const conversionQuery = useConversion(pendingConversion?.id ?? null, Boolean(pendingConversion));
   const latestConversion = conversionQuery.data;
 
@@ -120,13 +125,52 @@ export default function DocumentsPage() {
     ? documents.filter((document) => document.folder_id === selectedFolderId)
     : documents;
 
-  async function handleFile(file: File) {
-    setStatus(null);
+  function openUpload(file: File) {
+    setPendingUpload(file);
+    setUploadFormat("none");
+    setUploadIncludeImages(false);
+    setUploadError(null);
+  }
+
+  function closeUpload() {
+    setPendingUpload(null);
+    setUploadError(null);
+  }
+
+  async function handleUpload() {
+    if (!pendingUpload) {
+      return;
+    }
+    setUploadError(null);
     try {
-      await upload.mutateAsync({ file, folderId: selectedFolderId });
-      setStatus({ type: "success", text: "Upload successful. Processing started." });
+      const result = await upload.mutateAsync({
+        file: pendingUpload,
+        folderId: selectedFolderId,
+      });
+
+      if (uploadFormat !== "none") {
+        try {
+          await startConversion.mutateAsync({
+            documentId: result.document_id,
+            includeImages: uploadIncludeImages,
+            format: uploadFormat,
+          });
+          setStatus({
+            type: "success",
+            text: "Upload successful. Conversion queued.",
+          });
+        } catch {
+          setStatus({
+            type: "error",
+            text: "Uploaded, but the conversion could not start.",
+          });
+        }
+      } else {
+        setStatus({ type: "success", text: "Upload successful. Processing started." });
+      }
+      closeUpload();
     } catch {
-      setStatus({ type: "error", text: "Error uploading file." });
+      setUploadError("Error uploading file.");
     }
   }
 
@@ -135,7 +179,7 @@ export default function DocumentsPage() {
     setIsDragging(false);
     const file = event.dataTransfer.files[0];
     if (file) {
-      void handleFile(file);
+      openUpload(file);
     }
   }
 
@@ -259,6 +303,7 @@ export default function DocumentsPage() {
   function openConversion(document: DocumentRecord) {
     setPendingConversion(document);
     setIncludeImages(false);
+    setConvertFormat("markdown");
     setConvertError(null);
   }
 
@@ -277,6 +322,7 @@ export default function DocumentsPage() {
       await startConversion.mutateAsync({
         documentId: pendingConversion.id,
         includeImages,
+        format: convertFormat,
       });
     } catch {
       setConvertError("Failed to start conversion.");
@@ -305,35 +351,28 @@ export default function DocumentsPage() {
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              disabled={!workspaceId || upload.isPending}
+              disabled={!workspaceId}
             >
               <input
                 ref={fileInput}
                 type="file"
                 className={styles.hidden}
-                accept=".pdf,.md,.csv,.txt,.py,.js,.ts,.rs"
+                accept=".pdf,.docx,.md,.csv,.txt,.py,.js,.ts,.rs"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
-                    void handleFile(file);
+                    openUpload(file);
                   }
                   event.target.value = "";
                 }}
               />
-              {upload.isPending ? (
-                <span className={styles.dropContent}>
-                  <span className={styles.spinner} aria-hidden="true" />
-                  <span>Uploading...</span>
+              <span className={styles.dropContent}>
+                <span className={styles.dropIcon} aria-hidden="true">
+                  📥
                 </span>
-              ) : (
-                <span className={styles.dropContent}>
-                  <span className={styles.dropIcon} aria-hidden="true">
-                    📥
-                  </span>
-                  <span className={styles.dropTitle}>Click or drag &amp; drop</span>
-                  <span className={styles.dropHint}>PDF, MD, CSV, Code</span>
-                </span>
-              )}
+                <span className={styles.dropTitle}>Click or drag &amp; drop</span>
+                <span className={styles.dropHint}>PDF, DOCX, MD, CSV, Code</span>
+              </span>
             </Button>
 
             {status ? (
@@ -488,36 +527,60 @@ export default function DocumentsPage() {
       <Modal
         open={Boolean(pendingConversion)}
         onClose={closeConversion}
-        title="Convert to Markdown"
+        title="Convert document"
         footer={
           <>
             <Button variant="ghost" onClick={closeConversion}>
               Close
             </Button>
-            {!conversionQuery.isLoading &&
-            (!latestConversion || latestConversion.status === "error") ? (
-              <Button
-                variant="primary"
-                loading={startConversion.isPending}
-                onClick={handleConvert}
-                disabled={!pendingConversion}
-              >
-                Convert
-              </Button>
-            ) : null}
+            <Button
+              variant="primary"
+              loading={startConversion.isPending}
+              onClick={handleConvert}
+              disabled={
+                !pendingConversion ||
+                latestConversion?.status === "pending" ||
+                latestConversion?.status === "running"
+              }
+            >
+              Convert
+            </Button>
           </>
         }
       >
         <p>
-          Convert <strong>{pendingConversion?.filename}</strong> to Markdown.
+          Convert <strong>{pendingConversion?.filename}</strong>.
         </p>
 
-        {conversionQuery.isLoading ? (
-          <p className={styles.muted}>Checking conversion…</p>
-        ) : latestConversion ? (
+        <div className={styles.field}>
+          <span>Output format</span>
+          <Select
+            label="Output format"
+            value={convertFormat}
+            onChange={(next) => setConvertFormat(next as ConversionFormat)}
+            options={[
+              { value: "markdown", label: "Markdown" },
+              { value: "json", label: "JSON" },
+              { value: "both", label: "Markdown + JSON" },
+            ]}
+          />
+        </div>
+
+        <div className={styles.switchRow}>
+          <span>Include images</span>
+          <Switch
+            checked={includeImages}
+            onChange={setIncludeImages}
+            label="Include extracted images"
+          />
+        </div>
+
+        {conversionQuery.isLoading ? <p className={styles.muted}>Checking conversion…</p> : null}
+
+        {latestConversion ? (
           <div className={styles.conversionPanel}>
             <div className={styles.conversionRow}>
-              <span>Status</span>
+              <span>Latest</span>
               <span className={`${styles.statusBadge} ${statusClass(latestConversion.status)}`}>
                 {latestConversion.status}
               </span>
@@ -525,13 +588,23 @@ export default function DocumentsPage() {
 
             {latestConversion.status === "completed" && pendingConversion ? (
               <div className={styles.downloads}>
-                <a
-                  className={styles.download}
-                  href={`/api/documents/${pendingConversion.id}/markdown`}
-                >
-                  Download .md
-                </a>
-                {latestConversion.include_images ? (
+                {latestConversion.format !== "json" ? (
+                  <a
+                    className={styles.download}
+                    href={`/api/documents/${pendingConversion.id}/markdown`}
+                  >
+                    Download .md
+                  </a>
+                ) : null}
+                {latestConversion.format !== "markdown" ? (
+                  <a
+                    className={styles.download}
+                    href={`/api/documents/${pendingConversion.id}/json`}
+                  >
+                    Download .json
+                  </a>
+                ) : null}
+                {latestConversion.format !== "json" && latestConversion.include_images ? (
                   <a
                     className={styles.download}
                     href={`/api/documents/${pendingConversion.id}/markdown-zip`}
@@ -550,18 +623,58 @@ export default function DocumentsPage() {
               <p className={styles.error}>{latestConversion.error ?? "Conversion failed."}</p>
             ) : null}
           </div>
-        ) : (
-          <div className={styles.switchRow}>
-            <span>Include images</span>
-            <Switch
-              checked={includeImages}
-              onChange={setIncludeImages}
-              label="Include images in the Markdown output"
-            />
-          </div>
-        )}
+        ) : null}
 
         {convertError ? <p className={styles.error}>{convertError}</p> : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingUpload)}
+        onClose={closeUpload}
+        title="Upload document"
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeUpload}>
+              Cancel
+            </Button>
+            <Button loading={upload.isPending} onClick={handleUpload}>
+              Upload
+            </Button>
+          </>
+        }
+      >
+        <p>
+          <strong>{pendingUpload?.name}</strong>
+          {pendingUpload ? ` · ${formatSize(pendingUpload.size)}` : null}
+        </p>
+
+        <div className={styles.field}>
+          <span>After upload</span>
+          <Select
+            label="After upload"
+            value={uploadFormat}
+            onChange={(next) => setUploadFormat(next as "none" | ConversionFormat)}
+            options={[
+              { value: "none", label: "Keep original only" },
+              { value: "markdown", label: "Convert to Markdown" },
+              { value: "json", label: "Convert to JSON" },
+              { value: "both", label: "Convert to Markdown + JSON" },
+            ]}
+          />
+        </div>
+
+        <div className={styles.switchRow}>
+          <span>Include images</span>
+          <Switch
+            checked={uploadIncludeImages}
+            onChange={setUploadIncludeImages}
+            label="Include extracted images"
+            disabled={uploadFormat === "none"}
+          />
+        </div>
+
+        <p className={styles.muted}>The original file is always kept.</p>
+        {uploadError ? <p className={styles.error}>{uploadError}</p> : null}
       </Modal>
 
       <Modal
