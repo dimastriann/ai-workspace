@@ -30,8 +30,9 @@ responsive as the app grows.
   `Switch`.
 - Booleans use `Switch` (`role="switch"`, `aria-checked`), never a raw checkbox. Always
   provide a meaningful `label`.
-- Choice lists use `Select` (a styled native select) with a `label` or an enclosing
-  `<label>`. See `docs/ui.md` for the component contract.
+- Choice lists use `Select`, an accessible custom listbox (`role="combobox"` trigger,
+  `role="listbox"` popup, arrow/Home/End/Enter/Escape keys). The popup is portaled so it
+  is not clipped by scrolling containers.
 - Text inputs keep a visible label. Use `type="password"` for secrets and never prefill
   masked values.
 - Destructive actions require a confirm `Modal` that names the target and the consequence.

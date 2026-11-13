@@ -10,19 +10,50 @@ const options = [
 ];
 
 describe("Select", () => {
-  it("renders options and reports changes", async () => {
+  it("renders the selected option", () => {
+    render(<Select label="Role" options={options} value="viewer" onChange={() => {}} />);
+
+    expect(screen.getByRole("combobox", { name: "Role" })).toHaveTextContent("Viewer");
+  });
+
+  it("opens a listbox and selects an option with the mouse", async () => {
     const onChange = vi.fn();
-    render(<Select label="Role" options={options} defaultValue="viewer" onChange={onChange} />);
+    render(<Select label="Role" options={options} value="viewer" onChange={onChange} />);
 
-    const select = screen.getByRole("combobox", { name: "Role" });
-    await userEvent.selectOptions(select, "member");
+    const trigger = screen.getByRole("combobox", { name: "Role" });
+    await userEvent.click(trigger);
 
-    expect(onChange).toHaveBeenCalled();
-    expect(select).toHaveValue("member");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByRole("option", { name: "Member" }));
+
+    expect(onChange).toHaveBeenCalledWith("member");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("supports keyboard navigation", async () => {
+    const onChange = vi.fn();
+    render(<Select label="Role" options={options} value="viewer" onChange={onChange} />);
+
+    const trigger = screen.getByRole("combobox", { name: "Role" });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard("{Enter}");
+
+    expect(onChange).toHaveBeenCalledWith("member");
+  });
+
+  it("closes on Escape", async () => {
+    render(<Select label="Role" options={options} value="viewer" onChange={() => {}} />);
+
+    await userEvent.click(screen.getByRole("combobox", { name: "Role" }));
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
   it("supports a disabled state", () => {
-    render(<Select label="Role" options={options} disabled />);
+    render(<Select label="Role" options={options} value="viewer" onChange={() => {}} disabled />);
 
     expect(screen.getByRole("combobox", { name: "Role" })).toBeDisabled();
   });

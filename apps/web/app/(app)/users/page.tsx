@@ -85,7 +85,7 @@ export default function UsersPage() {
               <Select
                 label="Role"
                 value={role}
-                onChange={(event) => setRole(event.target.value as Role)}
+                onChange={(next) => setRole(next as Role)}
                 options={ROLE_OPTIONS}
               />
             </div>
@@ -117,10 +117,10 @@ export default function UsersPage() {
                       <Select
                         label={`Role for ${user.email}`}
                         value={user.role}
-                        onChange={(event) =>
+                        onChange={(next) =>
                           updateUser.mutate({
                             id: user.id,
-                            role: event.target.value as Role,
+                            role: next as Role,
                           })
                         }
                         options={ROLE_OPTIONS}

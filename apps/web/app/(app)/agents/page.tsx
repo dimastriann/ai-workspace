@@ -63,7 +63,7 @@ export default function AgentsPage() {
               <Select
                 label="Skill"
                 value={skill}
-                onChange={(event) => setSkill(event.target.value)}
+                onChange={(next) => setSkill(next)}
                 disabled={busy}
                 options={[
                   { value: "", label: "Default (search + calculator)" },
