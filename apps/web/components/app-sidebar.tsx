@@ -6,6 +6,7 @@ import { type ReactNode, useEffect } from "react";
 
 import { useLogout, useMe } from "@/lib/queries/auth";
 import { useWorkspaces } from "@/lib/queries/workspaces";
+import { useUiStore } from "@/lib/stores/ui";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 
 import styles from "./app-sidebar.module.css";
@@ -108,6 +109,8 @@ export function AppSidebar() {
   const { data: workspaces } = useWorkspaces();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
 
   useEffect(() => {
     if (!currentWorkspaceId && workspaces && workspaces.length > 0) {
@@ -115,56 +118,96 @@ export function AppSidebar() {
     }
   }, [currentWorkspaceId, workspaces, setWorkspace]);
 
+  useEffect(() => {
+    if (pathname) {
+      setSidebarOpen(false);
+    }
+  }, [pathname, setSidebarOpen]);
+
+  useEffect(() => {
+    if (!sidebarOpen) {
+      return;
+    }
+
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [sidebarOpen, setSidebarOpen]);
+
   const currentWorkspace = workspaces?.find((workspace) => workspace.id === currentWorkspaceId);
   const items = user?.role === "admin" ? [...navItems, settingsNav, usersNav] : navItems;
 
   return (
-    <aside className={`${styles.sidebar} glass`}>
-      <nav className={styles.nav}>
-        {items.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            className={`${styles.navItem} ${pathname === item.path ? styles.active : ""}`}
-          >
-            <span className={styles.navIcon}>{item.icon}</span>
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-
-      <div className={styles.footer}>
-        {currentWorkspace ? (
-          <div className={styles.workspaceBadge}>
-            <span aria-hidden="true">📁</span>
-            <span>{currentWorkspace.name}</span>
-          </div>
-        ) : (
-          <div className={`${styles.workspaceBadge} ${styles.muted}`}>
-            <span aria-hidden="true">⚠️</span>
-            <span>No Workspace Selected</span>
-          </div>
-        )}
-
-        {user ? (
-          <div className={styles.account}>
-            <span className={styles.email} title={user.email}>
-              {user.email}
-            </span>
-            <button
-              type="button"
-              className={styles.signOut}
-              onClick={() => {
-                logout.mutate(undefined, {
-                  onSuccess: () => router.replace("/login"),
-                });
-              }}
+    <>
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className={styles.backdrop}
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+      <aside
+        id="app-sidebar"
+        className={`${styles.sidebar} ${sidebarOpen ? styles.open : ""} glass`}
+      >
+        <nav className={styles.nav}>
+          {items.map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              className={`${styles.navItem} ${pathname === item.path ? styles.active : ""}`}
             >
-              Sign out
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </aside>
+              <span className={styles.navIcon}>{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        <div className={styles.footer}>
+          {currentWorkspace ? (
+            <div className={styles.workspaceBadge}>
+              <span aria-hidden="true">📁</span>
+              <span>{currentWorkspace.name}</span>
+            </div>
+          ) : (
+            <div className={`${styles.workspaceBadge} ${styles.muted}`}>
+              <span aria-hidden="true">⚠️</span>
+              <span>No Workspace Selected</span>
+            </div>
+          )}
+
+          {user ? (
+            <div className={styles.account}>
+              <span className={styles.email} title={user.email}>
+                {user.email}
+              </span>
+              <button
+                type="button"
+                className={styles.signOut}
+                onClick={() => {
+                  logout.mutate(undefined, {
+                    onSuccess: () => router.replace("/login"),
+                  });
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </aside>
+    </>
   );
 }
