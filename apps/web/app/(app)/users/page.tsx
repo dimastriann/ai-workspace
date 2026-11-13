@@ -124,6 +124,7 @@ export default function UsersPage() {
                           })
                         }
                         options={ROLE_OPTIONS}
+                        disabled={user.id === me?.id}
                       />
                     </td>
                     <td data-label="Active">
@@ -136,6 +137,7 @@ export default function UsersPage() {
                             is_active: checked,
                           })
                         }
+                        disabled={user.id === me?.id}
                       />
                     </td>
                   </tr>
