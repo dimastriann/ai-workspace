@@ -21,7 +21,13 @@ from app.core.errors import (
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
 )
-from app.models.database import Document, DocumentChunk, DocumentFolder, Workspace
+from app.models.database import (
+    Document,
+    DocumentChunk,
+    DocumentConversion,
+    DocumentFolder,
+    Workspace,
+)
 from app.services.document_types import detect_document_type
 from app.services.job_service import job_service
 from app.services.storage import (
@@ -114,6 +120,11 @@ class DocumentService:
         )
         artifacts = conversion_dir(document.workspace_id, document.id)
 
+        await db.execute(
+            delete(DocumentConversion).where(
+                DocumentConversion.document_id == document_id
+            )
+        )
         await db.execute(
             delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
         )

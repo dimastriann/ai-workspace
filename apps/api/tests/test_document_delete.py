@@ -12,6 +12,7 @@ from app.models.database import (
     AuditLog,
     Document,
     DocumentChunk,
+    DocumentConversion,
     Workspace,
 )
 
@@ -48,6 +49,14 @@ async def test_member_can_delete_document(
             content="hello world",
         )
     )
+    db_session.add(
+        DocumentConversion(
+            id=uuid.uuid4(),
+            document_id=document_id,
+            status="completed",
+            format="markdown",
+        )
+    )
     await db_session.commit()
 
     stored_files = list((tmp_path / "uploads").rglob("*notes.txt"))
@@ -68,6 +77,18 @@ async def test_member_can_delete_document(
         .all()
     )
     assert chunks == []
+    conversions = (
+        (
+            await db_session.execute(
+                select(DocumentConversion).where(
+                    DocumentConversion.document_id == document_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert conversions == []
     assert not stored_files[0].exists()
 
     audit = (
