@@ -5,11 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 
 import { useLogout, useMe } from "@/lib/queries/auth";
-import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useUiStore } from "@/lib/stores/ui";
-import { useWorkspaceStore } from "@/lib/stores/workspace";
 
 import styles from "./app-sidebar.module.css";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 interface NavItem {
   path: string;
@@ -106,17 +105,8 @@ export function AppSidebar() {
   const router = useRouter();
   const { data: user } = useMe();
   const logout = useLogout();
-  const { data: workspaces } = useWorkspaces();
-  const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
-  const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
   const sidebarOpen = useUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
-
-  useEffect(() => {
-    if (!currentWorkspaceId && workspaces && workspaces.length > 0) {
-      setWorkspace(workspaces[0].id);
-    }
-  }, [currentWorkspaceId, workspaces, setWorkspace]);
 
   useEffect(() => {
     if (pathname) {
@@ -145,7 +135,6 @@ export function AppSidebar() {
     };
   }, [sidebarOpen, setSidebarOpen]);
 
-  const currentWorkspace = workspaces?.find((workspace) => workspace.id === currentWorkspaceId);
   const items = user?.role === "admin" ? [...navItems, settingsNav, usersNav] : navItems;
 
   return (
@@ -176,17 +165,7 @@ export function AppSidebar() {
         </nav>
 
         <div className={styles.footer}>
-          {currentWorkspace ? (
-            <div className={styles.workspaceBadge}>
-              <span aria-hidden="true">📁</span>
-              <span>{currentWorkspace.name}</span>
-            </div>
-          ) : (
-            <div className={`${styles.workspaceBadge} ${styles.muted}`}>
-              <span aria-hidden="true">⚠️</span>
-              <span>No Workspace Selected</span>
-            </div>
-          )}
+          <WorkspaceSwitcher />
 
           {user ? (
             <div className={styles.account}>

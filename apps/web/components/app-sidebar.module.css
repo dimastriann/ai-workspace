@@ -59,21 +59,6 @@
   border-top: 1px solid var(--color-border);
 }
 
-.workspaceBadge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-tertiary);
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.muted {
-  opacity: 0.5;
-}
-
 .account {
   display: flex;
   align-items: center;
