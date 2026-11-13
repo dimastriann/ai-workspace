@@ -57,7 +57,7 @@
 
 .listbox {
   position: fixed;
-  z-index: 120;
+  z-index: 1100;
   margin: 0;
   padding: 4px;
   list-style: none;
