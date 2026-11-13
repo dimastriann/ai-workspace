@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     admin_email: str = ""
     admin_password: str = ""
 
+    # ── Skills ───────────────────────────────────────────────────────────
+    skills_dir: str = "skills"
+
     @property
     def cors_origin_list(self) -> list[str]:
         """Parse comma-separated CORS origins into a list."""

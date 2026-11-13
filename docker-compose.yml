@@ -25,11 +25,14 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      - SKILLS_DIR=/app/skills
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - api_uploads:/app/uploads
+      - ./skills:/app/skills:ro
 
   # ── Background Worker (Postgres job queue) ───────────────────────────────
   worker:
@@ -40,11 +43,14 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      - SKILLS_DIR=/app/skills
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - api_uploads:/app/uploads
+      - ./skills:/app/skills:ro
 
   # ── Rust Parser Service (optional accelerator) ───────────────────────────
   parser:

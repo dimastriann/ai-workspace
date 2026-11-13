@@ -1,6 +1,16 @@
 """AI Workspace API — Router Package."""
 
-from app.routers import agent, auth, chat, documents, rag, settings, users, workspaces
+from app.routers import (
+    agent,
+    auth,
+    chat,
+    documents,
+    rag,
+    settings,
+    skills,
+    users,
+    workspaces,
+)
 
 __all__ = [
     "agent",
@@ -9,6 +19,7 @@ __all__ = [
     "documents",
     "rag",
     "settings",
+    "skills",
     "users",
     "workspaces",
 ]
