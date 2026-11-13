@@ -182,3 +182,12 @@
   background: rgba(239, 68, 68, 0.12);
   color: var(--color-error);
 }
+
+.error {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  font-size: 0.85rem;
+}

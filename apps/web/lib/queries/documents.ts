@@ -9,7 +9,7 @@ export const documentKeys = {
 };
 
 async function fetchDocuments(workspaceId: string): Promise<DocumentRecord[]> {
-  const response = await fetch(`/api/documents/${workspaceId}`);
+  const response = await fetch(`/api/documents/workspace/${workspaceId}`);
   if (!response.ok) {
     throw new Error("Failed to load documents");
   }
@@ -21,6 +21,28 @@ export function useDocuments(workspaceId: string | null) {
     queryKey: documentKeys.byWorkspace(workspaceId ?? ""),
     queryFn: () => fetchDocuments(workspaceId as string),
     enabled: Boolean(workspaceId),
+  });
+}
+
+export function useDeleteDocument(workspaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (documentId: string) => {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to delete document");
+      }
+    },
+    onSuccess: () => {
+      if (workspaceId) {
+        void queryClient.invalidateQueries({
+          queryKey: documentKeys.byWorkspace(workspaceId),
+        });
+      }
+    },
   });
 }
 

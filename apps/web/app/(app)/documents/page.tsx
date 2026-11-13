@@ -2,8 +2,8 @@
 
 import { type DragEvent, useRef, useState } from "react";
 
-import { Button, Card } from "@/components/ui";
-import { useDocuments, useUploadDocument } from "@/lib/queries/documents";
+import { Button, Card, Modal } from "@/components/ui";
+import { useDeleteDocument, useDocuments, useUploadDocument } from "@/lib/queries/documents";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 import type { DocumentRecord } from "@/lib/types";
 
@@ -41,10 +41,13 @@ export default function DocumentsPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const { data: documents = [], isLoading } = useDocuments(workspaceId);
   const upload = useUploadDocument(workspaceId);
+  const removeDocument = useDeleteDocument(workspaceId);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<UploadStatus | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleFile(file: File) {
     setStatus(null);
@@ -62,6 +65,19 @@ export default function DocumentsPage() {
     const file = event.dataTransfer.files[0];
     if (file) {
       void handleFile(file);
+    }
+  }
+
+  async function handleDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+    setDeleteError(null);
+    try {
+      await removeDocument.mutateAsync(pendingDelete.id);
+      setPendingDelete(null);
+    } catch {
+      setDeleteError("Failed to delete document.");
     }
   }
 
@@ -152,6 +168,7 @@ export default function DocumentsPage() {
                     <th>Chunks</th>
                     <th>Status</th>
                     <th>Created</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,6 +186,15 @@ export default function DocumentsPage() {
                         </span>
                       </td>
                       <td>{formatDate(document.created_at)}</td>
+                      <td>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setPendingDelete(document)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -177,6 +203,31 @@ export default function DocumentsPage() {
           )}
         </Card>
       </div>
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          setPendingDelete(null);
+          setDeleteError(null);
+        }}
+        title="Delete document"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={removeDocument.isPending} onClick={handleDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Delete <strong>{pendingDelete?.filename}</strong>? This removes its chunks and stored
+          file.
+        </p>
+        {deleteError ? <p className={styles.error}>{deleteError}</p> : null}
+      </Modal>
     </div>
   );
 }
