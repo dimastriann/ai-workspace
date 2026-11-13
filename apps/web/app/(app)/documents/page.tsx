@@ -2,6 +2,7 @@
 
 import { type DragEvent, useRef, useState } from "react";
 
+import { DocumentActions } from "@/components/document-actions";
 import { FolderTreeView } from "@/components/folder-tree";
 import { Button, Card, Modal, Select, Switch } from "@/components/ui";
 import { useConversion, useConvertDocument } from "@/lib/queries/conversions";
@@ -55,6 +56,18 @@ function flattenFolders(folders: FolderTree[], depth = 0): { folder: FolderTree;
     { folder, depth },
     ...flattenFolders(folder.children, depth + 1),
   ]);
+}
+
+function descendantIds(folder: FolderTree): Set<string> {
+  const ids = new Set<string>();
+  const walk = (nodes: FolderTree[]) => {
+    for (const node of nodes) {
+      ids.add(node.id);
+      walk(node.children);
+    }
+  };
+  walk(folder.children);
+  return ids;
 }
 
 function folderPath(folders: FolderTree[], folderId: string): string[] {
@@ -120,6 +133,13 @@ export default function DocumentsPage() {
       label: `${"  ".repeat(depth)}${folder.name}`,
     })),
   ];
+  const excludedFolderIds =
+    folderModal?.mode === "edit" && folderModal.folder
+      ? new Set([folderModal.folder.id, ...descendantIds(folderModal.folder)])
+      : new Set<string>();
+  const folderParentOptions = folderOptions.filter(
+    (option) => option.value === "" || !excludedFolderIds.has(option.value),
+  );
   const currentPath = selectedFolderId ? folderPath(folders, selectedFolderId) : [];
   const visibleDocuments = selectedFolderId
     ? documents.filter((document) => document.folder_id === selectedFolderId)
@@ -466,29 +486,12 @@ export default function DocumentsPage() {
                       </td>
                       <td data-label="Created">{formatDate(document.created_at)}</td>
                       <td data-label="Actions">
-                        <div className={styles.actions}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openMoveDocument(document)}
-                          >
-                            Move
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openConversion(document)}
-                          >
-                            Convert
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => setPendingDelete(document)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
+                        <DocumentActions
+                          filename={document.filename}
+                          onMove={() => openMoveDocument(document)}
+                          onConvert={() => openConversion(document)}
+                          onDelete={() => setPendingDelete(document)}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -713,7 +716,7 @@ export default function DocumentsPage() {
               label="Parent folder"
               value={folderParentId}
               onChange={setFolderParentId}
-              options={folderOptions}
+              options={folderParentOptions}
             />
           </div>
 
