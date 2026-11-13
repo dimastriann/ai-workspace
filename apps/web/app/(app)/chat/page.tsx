@@ -58,6 +58,10 @@ export default function ChatPage() {
         <p className={styles.secondary}>Interactive conversational AI with context awareness.</p>
       </header>
 
+      <Button variant="primary" className={styles.mobileNewChat} onClick={reset}>
+        + New Chat
+      </Button>
+
       <div className={styles.chatLayout}>
         <aside className={`${styles.sessions} glass`}>
           <Button variant="primary" className={styles.newChat} onClick={reset}>

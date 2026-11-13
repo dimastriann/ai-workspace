@@ -18,6 +18,17 @@
   color: var(--color-text-secondary);
 }
 
+.mobileNewChat {
+  display: inline-flex;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 1024px) {
+  .mobileNewChat {
+    display: none;
+  }
+}
+
 .chatLayout {
   display: flex;
   gap: 24px;
@@ -148,13 +159,23 @@
 
 .inputArea {
   display: flex;
+  align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 12px;
   border-top: 1px solid var(--color-border);
 }
 
+@media (max-width: 480px) {
+  .inputArea {
+    gap: 8px;
+    padding: 10px;
+  }
+}
+
 .input {
   flex: 1;
+  min-width: 0;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
