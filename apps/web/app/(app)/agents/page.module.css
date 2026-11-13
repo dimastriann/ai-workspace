@@ -61,15 +61,6 @@
   color: var(--color-text-secondary);
 }
 
-.select {
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 9px 12px;
-  color: var(--color-text-primary);
-  font-size: 0.85rem;
-}
-
 .hint {
   margin: 0;
   font-size: 0.8rem;

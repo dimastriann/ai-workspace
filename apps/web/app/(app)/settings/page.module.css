@@ -52,7 +52,6 @@
   gap: 8px;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
-  cursor: pointer;
 }
 
 .inputGroup {
@@ -77,4 +76,27 @@
 
 .input:focus {
   border-color: var(--color-primary);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .inputGroup {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: none;
+  }
+
+  .input {
+    min-height: 44px;
+  }
 }

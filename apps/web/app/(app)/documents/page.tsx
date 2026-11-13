@@ -208,19 +208,21 @@ export default function DocumentsPage() {
                 <tbody>
                   {documents.map((document: DocumentRecord) => (
                     <tr key={document.id}>
-                      <td className={styles.filename}>{document.filename}</td>
-                      <td>
+                      <td className={styles.filename} data-label="Name">
+                        {document.filename}
+                      </td>
+                      <td data-label="Type">
                         <span className={styles.badge}>{document.document_type}</span>
                       </td>
-                      <td>{formatSize(document.size_bytes)}</td>
-                      <td>{document.chunk_count}</td>
-                      <td>
+                      <td data-label="Size">{formatSize(document.size_bytes)}</td>
+                      <td data-label="Chunks">{document.chunk_count}</td>
+                      <td data-label="Status">
                         <span className={`${styles.statusBadge} ${statusClass(document.status)}`}>
                           {document.status}
                         </span>
                       </td>
-                      <td>{formatDate(document.created_at)}</td>
-                      <td>
+                      <td data-label="Created">{formatDate(document.created_at)}</td>
+                      <td data-label="Actions">
                         <div className={styles.actions}>
                           <Button
                             variant="secondary"
