@@ -136,6 +136,24 @@ async def test_admin_can_manage_users(
     assert duplicate.status_code == 409
 
 
+async def test_admin_cannot_deactivate_or_demote_self(
+    auth_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_and_login(
+        auth_client, db_session, email="admin@example.com", role=Role.ADMIN
+    )
+    me = await auth_client.get("/api/auth/me")
+    admin_id = me.json()["id"]
+
+    deactivate = await auth_client.patch(
+        f"/api/users/{admin_id}", json={"is_active": False}
+    )
+    assert deactivate.status_code == 400
+
+    demote = await auth_client.patch(f"/api/users/{admin_id}", json={"role": "member"})
+    assert demote.status_code == 400
+
+
 async def test_member_cannot_manage_users(
     auth_client: AsyncClient, db_session: AsyncSession
 ) -> None:

@@ -16,6 +16,7 @@ from app.dependencies import (
     require_same_origin,
 )
 from app.models.database import User
+from app.models.enums import Role
 from app.models.user import (
     PasswordChangeRequest,
     UserCreate,
@@ -86,6 +87,18 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
+
+    if user.id == admin.id:
+        if data.is_active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot deactivate your own account",
+            )
+        if data.role is not None and data.role is not Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot remove your own admin role",
+            )
 
     updated = await auth_service.update_user(
         user,
