@@ -79,6 +79,7 @@ export interface AgentRunSummary {
   id: string;
   instruction: string;
   skill: string | null;
+  workflow_id: string | null;
   status: string;
   created_at: string;
 }
@@ -117,4 +118,30 @@ export interface DocumentUploadResult {
   document_type: string;
   chunk_count: number;
   message: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  ordinal: number;
+  instruction: string;
+  skill: string | null;
+}
+
+export interface WorkflowSummary {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  step_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowDetail extends WorkflowSummary {
+  steps: WorkflowStep[];
+}
+
+export interface WorkflowStepInput {
+  instruction: string;
+  skill: string | null;
 }

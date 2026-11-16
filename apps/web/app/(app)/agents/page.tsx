@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 
 import { Button, Card, Select } from "@/components/ui";
+import { WorkflowPanel } from "@/components/workflow-panel";
 import { useAgentStream } from "@/lib/hooks/use-agent-stream";
 import { agentKeys, useAgentRuns, useSkills } from "@/lib/queries/agents";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
@@ -19,6 +20,7 @@ export default function AgentsPage() {
 
   const [instruction, setInstruction] = useState("");
   const [skill, setSkill] = useState("");
+  const [view, setView] = useState<"task" | "workflows">("task");
 
   const busy = status === "running";
   const canRun = Boolean(workspaceId) && instruction.trim().length > 0 && !busy;
@@ -46,100 +48,131 @@ export default function AgentsPage() {
         </p>
       </header>
 
-      <div className={styles.grid}>
-        <Card header="New Task">
-          <form className={styles.form} onSubmit={handleSubmit}>
-            <textarea
-              className={styles.textarea}
-              placeholder="Describe the task for the agent..."
-              aria-label="Task description"
-              value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
-              disabled={busy}
-            />
-
-            <div className={styles.field}>
-              <span>Skill</span>
-              <Select
-                label="Skill"
-                value={skill}
-                onChange={(next) => setSkill(next)}
-                disabled={busy}
-                options={[
-                  { value: "", label: "Default (search + calculator)" },
-                  ...skills.map((item) => ({
-                    value: item.name,
-                    label: `${item.name} — ${item.description}`,
-                  })),
-                ]}
-              />
-            </div>
-
-            {!workspaceId ? <p className={styles.hint}>Select a workspace first.</p> : null}
-
-            <div className={styles.actions}>
-              <Button type="submit" loading={busy} disabled={!canRun}>
-                Execute Agent
-              </Button>
-              {status !== "idle" ? (
-                <Button type="button" variant="ghost" onClick={reset}>
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-          </form>
-        </Card>
-
-        <Card
-          className={styles.runCard}
-          header={
-            <div className={styles.runHeader}>
-              <span>Run</span>
-              <span className={`${styles.status} ${styles[status] ?? ""}`}>{status}</span>
-            </div>
-          }
+      <div className={styles.tabs} role="tablist" aria-label="Agent mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "task"}
+          className={`${styles.tab} ${view === "task" ? styles.tabActive : ""}`}
+          onClick={() => setView("task")}
         >
-          {tools.length > 0 ? (
-            <div className={styles.tools}>
-              {tools.map((tool) => (
-                <div key={tool.id} className={styles.tool}>
-                  <span className={styles.toolName}>{tool.tool}</span>
-                  <span className={tool.status === "completed" ? styles.ok : styles.fail}>
-                    {tool.status}
-                  </span>
-                  <span className={styles.toolOutput}>{tool.output}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {output ? (
-            <pre className={styles.output}>{output}</pre>
-          ) : (
-            <div className={styles.empty}>No output yet.</div>
-          )}
-
-          {runId ? <div className={styles.runId}>run {runId}</div> : null}
-          {error ? <p className={styles.error}>{error}</p> : null}
-        </Card>
+          Single task
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "workflows"}
+          className={`${styles.tab} ${view === "workflows" ? styles.tabActive : ""}`}
+          onClick={() => setView("workflows")}
+        >
+          Workflows
+        </button>
       </div>
 
-      <Card className={styles.history} header="Recent runs">
-        {runs.length === 0 ? (
-          <div className={styles.empty}>No task history available.</div>
-        ) : (
-          <div className={styles.runs}>
-            {runs.map((run) => (
-              <div key={run.id} className={styles.runRow}>
-                <span className={styles.runInstruction}>{run.instruction}</span>
-                <span className={styles.runSkill}>{run.skill ?? "default"}</span>
-                <span className={`${styles.status} ${styles[run.status] ?? ""}`}>{run.status}</span>
-                <span className={styles.runDate}>{new Date(run.created_at).toLocaleString()}</span>
-              </div>
-            ))}
+      {view === "task" ? (
+        <>
+          <div className={styles.grid}>
+            <Card header="New Task">
+              <form className={styles.form} onSubmit={handleSubmit}>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="Describe the task for the agent..."
+                  aria-label="Task description"
+                  value={instruction}
+                  onChange={(event) => setInstruction(event.target.value)}
+                  disabled={busy}
+                />
+
+                <div className={styles.field}>
+                  <span>Skill</span>
+                  <Select
+                    label="Skill"
+                    value={skill}
+                    onChange={(next) => setSkill(next)}
+                    disabled={busy}
+                    options={[
+                      { value: "", label: "Default (search + calculator)" },
+                      ...skills.map((item) => ({
+                        value: item.name,
+                        label: `${item.name} — ${item.description}`,
+                      })),
+                    ]}
+                  />
+                </div>
+
+                {!workspaceId ? <p className={styles.hint}>Select a workspace first.</p> : null}
+
+                <div className={styles.actions}>
+                  <Button type="submit" loading={busy} disabled={!canRun}>
+                    Execute Agent
+                  </Button>
+                  {status !== "idle" ? (
+                    <Button type="button" variant="ghost" onClick={reset}>
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
+            </Card>
+
+            <Card
+              className={styles.runCard}
+              header={
+                <div className={styles.runHeader}>
+                  <span>Run</span>
+                  <span className={`${styles.status} ${styles[status] ?? ""}`}>{status}</span>
+                </div>
+              }
+            >
+              {tools.length > 0 ? (
+                <div className={styles.tools}>
+                  {tools.map((tool) => (
+                    <div key={tool.id} className={styles.tool}>
+                      <span className={styles.toolName}>{tool.tool}</span>
+                      <span className={tool.status === "completed" ? styles.ok : styles.fail}>
+                        {tool.status}
+                      </span>
+                      <span className={styles.toolOutput}>{tool.output}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {output ? (
+                <pre className={styles.output}>{output}</pre>
+              ) : (
+                <div className={styles.empty}>No output yet.</div>
+              )}
+
+              {runId ? <div className={styles.runId}>run {runId}</div> : null}
+              {error ? <p className={styles.error}>{error}</p> : null}
+            </Card>
           </div>
-        )}
-      </Card>
+
+          <Card className={styles.history} header="Recent runs">
+            {runs.length === 0 ? (
+              <div className={styles.empty}>No task history available.</div>
+            ) : (
+              <div className={styles.runs}>
+                {runs.map((run) => (
+                  <div key={run.id} className={styles.runRow}>
+                    <span className={styles.runInstruction}>{run.instruction}</span>
+                    <span className={styles.runSkill}>{run.skill ?? "default"}</span>
+                    <span className={`${styles.status} ${styles[run.status] ?? ""}`}>
+                      {run.status}
+                    </span>
+                    <span className={styles.runDate}>
+                      {new Date(run.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </>
+      ) : (
+        <WorkflowPanel workspaceId={workspaceId} skills={skills} />
+      )}
     </div>
   );
 }

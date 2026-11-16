@@ -1,0 +1,316 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: 320px 1fr;
+  }
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.muted {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workflowRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+}
+
+.workflowRow:hover,
+.selected {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+}
+
+.workflowSelect {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.workflowName {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+}
+
+.workflowMeta {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.rowAction {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.rowAction:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.rowAction:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: var(--color-error);
+}
+
+.runCard {
+  align-self: start;
+}
+
+.status {
+  font-size: 0.72rem;
+  text-transform: capitalize;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.running {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.completed {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.error {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.description {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.stepPreview {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.stepPreview li {
+  margin-bottom: 6px;
+}
+
+.skillTag {
+  margin-left: 8px;
+  font-size: 0.7rem;
+  color: var(--color-primary-light);
+}
+
+.input,
+.textInput {
+  width: 100%;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  resize: vertical;
+}
+
+.input:focus-visible,
+.textInput:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.streamSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.streamStep {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-tint);
+}
+
+.streamHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.streamInstruction {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.tool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-size: 0.75rem;
+}
+
+.toolName {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ok {
+  color: var(--color-success);
+}
+
+.fail {
+  color: var(--color-error);
+}
+
+.toolOutput {
+  flex-basis: 100%;
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+
+.output {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.runId {
+  margin-top: 10px;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.stepsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.stepEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stepEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.stepButtons {
+  display: flex;
+  gap: 2px;
+}
+
+@media (max-width: 640px) {
+  .workflowRow {
+    min-height: 44px;
+  }
+
+  .input,
+  .textInput {
+    min-height: 44px;
+  }
+}
