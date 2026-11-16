@@ -36,6 +36,7 @@
 
 .serverInfo {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -101,6 +102,10 @@
   flex-shrink: 0;
 }
 
+.actions > button {
+  flex-shrink: 0;
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -162,11 +167,20 @@
 
 .toolInfo {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.toolInfo span {
+  overflow-wrap: anywhere;
+}
+
+.toolRow > button {
+  flex-shrink: 0;
 }
 
 .toolInfo strong {

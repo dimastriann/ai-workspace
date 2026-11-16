@@ -1,5 +1,6 @@
 .switch {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   width: 44px;
   height: 24px;
