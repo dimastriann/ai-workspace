@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { McpServersPanel } from "@/components/mcp-servers-panel";
 import { Button, Card, Switch } from "@/components/ui";
 import { useMe } from "@/lib/queries/auth";
 import { useSettings, useUpdateSetting } from "@/lib/queries/settings";
@@ -93,6 +94,10 @@ export default function SettingsPage() {
           </div>
         ) : null}
       </Card>
+
+      <div className={styles.section}>
+        <McpServersPanel enabled={Boolean(settings?.["features.mcp"])} />
+      </div>
     </div>
   );
 }

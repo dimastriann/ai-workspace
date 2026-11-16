@@ -23,6 +23,10 @@
   color: var(--color-text-secondary);
 }
 
+.section {
+  margin-top: 24px;
+}
+
 .rows {
   display: flex;
   flex-direction: column;

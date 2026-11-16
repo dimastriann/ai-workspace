@@ -145,3 +145,33 @@ export interface WorkflowStepInput {
   instruction: string;
   skill: string | null;
 }
+
+export type McpTransport = "http" | "sse";
+
+export interface McpTool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  url: string;
+  header_names: string[];
+  enabled: boolean;
+  timeout_seconds: number;
+  disabled_tools: string[];
+  last_status: string | null;
+  last_error: string | null;
+  last_checked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface McpTestResult {
+  ok: boolean;
+  tools: McpTool[];
+  error: string | null;
+}
