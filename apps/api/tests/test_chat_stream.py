@@ -8,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import ChatMessage, ChatSession, Workspace
-from app.services.agent_provider import ProviderEvent
+from app.services.agent_provider import ProviderEvent, ToolCall
 from app.services.chat_service import ChatService
+from app.services.tools import ToolSpec
 
 
 class FakeProvider:
@@ -92,3 +93,80 @@ async def test_chat_stream_includes_history(db_session: AsyncSession) -> None:
         item["role"] == "user" and item["content"] == "Earlier question"
         for item in seen[0]
     )
+
+
+class ToolProvider:
+    def __init__(self, turns: list[list[ProviderEvent]]) -> None:
+        self._turns = turns
+
+    async def stream(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> AsyncGenerator[ProviderEvent]:
+        del messages, tools
+        for event in self._turns.pop(0):
+            yield event
+
+
+async def test_chat_can_call_mcp_tools(db_session: AsyncSession, monkeypatch) -> None:
+    workspace = Workspace(id=uuid.uuid4(), name="Test")
+    db_session.add(workspace)
+    await db_session.commit()
+    session = ChatSession(
+        id=uuid.uuid4(), workspace_id=workspace.id, title="Tool Conversation"
+    )
+    db_session.add(session)
+    await db_session.commit()
+
+    seen: list[dict[str, Any]] = []
+
+    async def handler(_db, _workspace_id, arguments):
+        seen.append(arguments)
+        return "GitHub result"
+
+    spec = ToolSpec(
+        name="mcp__GitHub__list_issues",
+        description="List issues",
+        parameters={"type": "object", "properties": {}},
+        permission="mcp",
+        handler=handler,
+    )
+
+    async def fake_list_tools(_db):
+        return [spec]
+
+    monkeypatch.setattr(
+        "app.services.chat_service.mcp_service.list_tool_specs", fake_list_tools
+    )
+
+    provider = ToolProvider(
+        [
+            [
+                ProviderEvent(
+                    type="tool_calls",
+                    tool_calls=[
+                        ToolCall(
+                            id="call-1",
+                            name="mcp__GitHub__list_issues",
+                            arguments={},
+                        )
+                    ],
+                ),
+                ProviderEvent(type="done"),
+            ],
+            [
+                ProviderEvent(type="token", content="Here are your issues."),
+                ProviderEvent(type="done"),
+            ],
+        ]
+    )
+
+    service = ChatService(provider=provider)
+    tokens = [
+        token
+        async for token in service.chat_stream(
+            "List issues", session.id, workspace.id, db_session, context=""
+        )
+    ]
+
+    assert seen == [{}]
+    assert "".join(tokens) == "Here are your issues."

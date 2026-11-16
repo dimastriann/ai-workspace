@@ -7,6 +7,7 @@ Orchestrates the conversational AI logic:
 3. Streaming response generation through the shared provider.
 """
 
+import json
 from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID, uuid4
@@ -15,8 +16,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import ChatMessage, ChatSession
-from app.services.agent_provider import AgentProvider, get_provider
+from app.services.agent_provider import AgentProvider, ToolCall, get_provider
+from app.services.agent_service import DEFAULT_PERMISSIONS
+from app.services.audit_service import audit_service
+from app.services.mcp_service import mcp_service
 from app.services.retrieval import retrieval_service
+from app.services.tools import ToolSpec, tool_registry
+
+MAX_CHAT_TOOL_ROUNDS = 4
 
 
 class ChatService:
@@ -73,6 +80,7 @@ class ChatService:
         workspace_id: UUID | None,
         db: AsyncSession,
         context: str | None = None,
+        user_id: UUID | None = None,
     ) -> AsyncGenerator[str]:
         """Stream a response, persisting the user and assistant messages."""
         if context is None:
@@ -99,17 +107,103 @@ class ChatService:
         db.add(user_msg)
         await db.commit()
 
+        permissions = set(DEFAULT_PERMISSIONS)
+        mcp_tools = await mcp_service.list_tool_specs(db)
+        if mcp_tools:
+            permissions.add("mcp")
+        tools = [*tool_registry.list_for(permissions), *mcp_tools]
+        available = {tool.name: tool for tool in tools}
+        schemas = [tool.to_openai() for tool in tools]
+
         full_response = ""
-        async for event in self._provider.stream(messages, []):
-            if event.type == "token":
-                full_response += event.content
-                yield event.content
+        for _ in range(MAX_CHAT_TOOL_ROUNDS):
+            assistant_text = ""
+            calls: list[ToolCall] = []
+
+            async for event in self._provider.stream(messages, schemas):
+                if event.type == "token":
+                    assistant_text += event.content
+                    full_response += event.content
+                    yield event.content
+                elif event.type == "tool_calls":
+                    calls = event.tool_calls
+
+            if not calls:
+                break
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_text or None,
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for call in calls
+                    ],
+                }
+            )
+
+            for call in calls:
+                output, _status = await self._run_tool(
+                    db, workspace_id, call, permissions, available, user_id, session_id
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": output,
+                    }
+                )
 
         assistant_msg = ChatMessage(
             session_id=session_id, role="assistant", content=full_response
         )
         db.add(assistant_msg)
         await db.commit()
+
+    async def _run_tool(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID | None,
+        call: ToolCall,
+        permissions: set[str],
+        available: dict[str, ToolSpec],
+        user_id: UUID | None,
+        session_id: UUID,
+    ) -> tuple[str, str]:
+        tool = available.get(call.name)
+        if tool is None or tool.permission not in permissions:
+            return f"Tool not available: {call.name}", "error"
+        if tool.requires_approval:
+            return f"Tool requires approval: {call.name}", "error"
+        if workspace_id is None and tool.name in {"search_documents"}:
+            return "No workspace selected for document search", "error"
+
+        try:
+            output = await tool.handler(db, workspace_id or UUID(int=0), call.arguments)
+            status = "completed"
+        except Exception as exc:
+            output, status = f"Tool failed: {exc}", "error"
+
+        if tool.permission == "mcp":
+            await audit_service.record(
+                db,
+                action="mcp.tool_call",
+                actor_id=user_id,
+                target=call.name,
+                details={
+                    "session_id": str(session_id),
+                    "tool": call.name,
+                    "status": status,
+                },
+            )
+        return output, status
 
     async def _get_history(
         self, session_id: UUID, db: AsyncSession
