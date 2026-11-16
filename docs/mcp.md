@@ -34,7 +34,7 @@ gateway that exposes a remote MCP URL, then register that URL here.
 ## Behaviour
 
 - Tools are namespaced per server to avoid collisions.
-- Agent runs and workflow runs merge built-in tools with enabled MCP tools.
+- Chat, agent runs, and workflow runs merge built-in tools with enabled MCP tools.
 - Discovery is cached briefly; a failing server is skipped and never blocks core features.
 - Tool calls are truncated, bounded by the server timeout, and audited.
 - Tool output is treated as untrusted text.
