@@ -26,6 +26,7 @@ from app.routers import (
     rag,
     skills,
     users,
+    workflows,
     workspaces,
 )
 from app.routers import (
@@ -101,6 +102,7 @@ app.include_router(settings_router.router, prefix="/api/settings", tags=["Settin
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(rag.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(agent.router, prefix="/api/agents", tags=["Agents"])
+app.include_router(workflows.router, prefix="/api/workflows", tags=["Workflows"])
 app.include_router(skills.router, prefix="/api/skills", tags=["Skills"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])

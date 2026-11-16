@@ -27,3 +27,11 @@ class FolderNotFoundError(Exception):
 
 class FolderConflictError(Exception):
     """A folder operation conflicts with existing structure or names."""
+
+
+class WorkflowNotFoundError(Exception):
+    """The requested workflow does not exist."""
+
+
+class WorkflowValidationError(Exception):
+    """A workflow definition is invalid."""

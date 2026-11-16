@@ -343,6 +343,59 @@ class DocumentConversion(Base):
     )
 
 
+class Workflow(Base):
+    """
+    A saved, ordered agent workflow.
+    """
+
+    __tablename__ = "workflows"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+    steps: Mapped[list["WorkflowStep"]] = relationship(
+        "WorkflowStep",
+        back_populates="workflow",
+        cascade="all, delete-orphan",
+        order_by="WorkflowStep.ordinal",
+    )
+
+
+class WorkflowStep(Base):
+    """
+    One ordered instruction in a workflow.
+    """
+
+    __tablename__ = "workflow_steps"
+    __table_args__ = (
+        UniqueConstraint("workflow_id", "ordinal", name="uq_workflow_steps_ordinal"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflows.id"), nullable=False, index=True
+    )
+    ordinal: Mapped[int] = mapped_column(nullable=False)
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    skill: Mapped[str | None] = mapped_column(String(64))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    workflow: Mapped["Workflow"] = relationship("Workflow", back_populates="steps")
+
+
 class AgentRun(Base):
     """
     A single agent execution.
@@ -356,6 +409,9 @@ class AgentRun(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"), nullable=False, index=True
+    )
+    workflow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     skill: Mapped[str | None] = mapped_column(String(64))

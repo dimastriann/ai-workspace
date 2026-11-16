@@ -103,6 +103,7 @@ async def list_runs(
             id=str(run.id),
             instruction=run.instruction,
             skill=run.skill,
+            workflow_id=str(run.workflow_id) if run.workflow_id else None,
             status=run.status,
             created_at=run.created_at,
         )
@@ -134,6 +135,7 @@ async def get_run(
         id=str(run.id),
         instruction=run.instruction,
         skill=run.skill,
+        workflow_id=str(run.workflow_id) if run.workflow_id else None,
         status=run.status,
         created_at=run.created_at,
         result=run.result,

@@ -35,6 +35,7 @@ class AgentRunSummary(BaseModel):
     id: str
     instruction: str
     skill: str | None = None
+    workflow_id: str | None = None
     status: str
     created_at: datetime
 

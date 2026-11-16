@@ -10,6 +10,7 @@ from app.routers import (
     settings,
     skills,
     users,
+    workflows,
     workspaces,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "settings",
     "skills",
     "users",
+    "workflows",
     "workspaces",
 ]
