@@ -47,6 +47,7 @@ SETTINGS: dict[str, SettingSpec] = {
         "features.agent_shell", SettingType.BOOL, False
     ),
     "features.vector_rag": SettingSpec("features.vector_rag", SettingType.BOOL, False),
+    "features.mcp": SettingSpec("features.mcp", SettingType.BOOL, False),
     "rag.retriever": SettingSpec("rag.retriever", SettingType.STRING, "postgres"),
     "llm.provider": SettingSpec("llm.provider", SettingType.STRING, "openai"),
     "llm.openai_model": SettingSpec("llm.openai_model", SettingType.STRING, "gpt-4o"),

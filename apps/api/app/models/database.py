@@ -396,6 +396,33 @@ class WorkflowStep(Base):
     workflow: Mapped["Workflow"] = relationship("Workflow", back_populates="steps")
 
 
+class McpServer(Base):
+    """
+    Admin-managed remote MCP server used as an agent tool source.
+    """
+
+    __tablename__ = "mcp_servers"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    transport: Mapped[str] = mapped_column(String(10), nullable=False, default="http")
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    headers_encrypted: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
+    timeout_seconds: Mapped[int] = mapped_column(default=10, nullable=False)
+    disabled_tools: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+
+    last_status: Mapped[str | None] = mapped_column(String(20))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+
 class AgentRun(Base):
     """
     A single agent execution.

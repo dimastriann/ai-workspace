@@ -23,6 +23,7 @@ from app.routers import (
     chat,
     documents,
     folders,
+    mcp,
     rag,
     skills,
     users,
@@ -106,6 +107,7 @@ app.include_router(workflows.router, prefix="/api/workflows", tags=["Workflows"]
 app.include_router(skills.router, prefix="/api/skills", tags=["Skills"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
+app.include_router(mcp.router, prefix="/api/mcp", tags=["MCP"])
 app.include_router(workspaces.router, prefix="/api/workspaces", tags=["Workspaces"])
 
 

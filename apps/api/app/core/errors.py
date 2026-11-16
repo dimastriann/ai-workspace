@@ -35,3 +35,11 @@ class WorkflowNotFoundError(Exception):
 
 class WorkflowValidationError(Exception):
     """A workflow definition is invalid."""
+
+
+class McpServerNotFoundError(Exception):
+    """The requested MCP server does not exist."""
+
+
+class McpValidationError(Exception):
+    """An MCP server configuration is invalid."""

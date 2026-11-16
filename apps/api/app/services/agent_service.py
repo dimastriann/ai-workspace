@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import AgentRun, AgentStep
 from app.models.skill import SkillManifest
 from app.services.agent_provider import AgentProvider, ToolCall
-from app.services.tools import tool_registry
+from app.services.audit_service import audit_service
+from app.services.mcp_service import mcp_service
+from app.services.tools import ToolSpec, tool_registry
 
 DEFAULT_PERMISSIONS = {"search_documents", "calculator"}
 MAX_STEPS = 6
@@ -31,8 +33,12 @@ class AgentService:
         provider: AgentProvider,
         max_steps: int = MAX_STEPS,
     ) -> AsyncGenerator[dict[str, Any]]:
-        permissions = set(skill.permissions) if skill else DEFAULT_PERMISSIONS
-        tools = tool_registry.list_for(permissions)
+        permissions = set(skill.permissions) if skill else set(DEFAULT_PERMISSIONS)
+        mcp_tools = await mcp_service.list_tool_specs(db)
+        if mcp_tools:
+            permissions.add("mcp")
+        tools = [*tool_registry.list_for(permissions), *mcp_tools]
+        available = {tool.name: tool for tool in tools}
         schemas = [tool.to_openai() for tool in tools]
 
         messages: list[dict[str, Any]] = [
@@ -89,7 +95,7 @@ class AgentService:
 
                 for call in calls:
                     output, step_status = await self._run_tool(
-                        db, run, call, permissions
+                        db, run, call, permissions, available
                     )
                     step = AgentStep(
                         run_id=run.id,
@@ -141,8 +147,9 @@ class AgentService:
         run: AgentRun,
         call: ToolCall,
         permissions: set[str],
+        available: dict[str, ToolSpec],
     ) -> tuple[str, str]:
-        tool = tool_registry.get(call.name)
+        tool = available.get(call.name)
         if tool is None or tool.permission not in permissions:
             return f"Tool not available: {call.name}", "error"
         if tool.requires_approval:
@@ -150,9 +157,23 @@ class AgentService:
 
         try:
             output = await tool.handler(db, run.workspace_id, call.arguments)
-            return output, "completed"
+            status = "completed"
         except Exception as exc:
-            return f"Tool failed: {exc}", "error"
+            output, status = f"Tool failed: {exc}", "error"
+
+        if tool.permission == "mcp":
+            await audit_service.record(
+                db,
+                action="mcp.tool_call",
+                actor_id=run.user_id,
+                target=call.name,
+                details={
+                    "run_id": str(run.id),
+                    "tool": call.name,
+                    "status": status,
+                },
+            )
+        return output, status
 
     def _system_prompt(self, skill: SkillManifest | None) -> str:
         prompt = (

@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import AgentRun, AgentStep, Workflow
 from app.services.agent_provider import AgentProvider, ToolCall
 from app.services.agent_service import DEFAULT_PERMISSIONS
+from app.services.audit_service import audit_service
+from app.services.mcp_service import mcp_service
 from app.services.skills import skill_registry
-from app.services.tools import tool_registry
+from app.services.tools import ToolSpec, tool_registry
 
 MAX_TOOL_ROUNDS = 4
 MAX_PERSISTED_STEPS = 50
@@ -46,7 +48,11 @@ class WorkflowExecutor:
                 permissions = (
                     set(skill.permissions) if skill else set(DEFAULT_PERMISSIONS)
                 )
-                tools = tool_registry.list_for(permissions)
+                mcp_tools = await mcp_service.list_tool_specs(db)
+                if mcp_tools:
+                    permissions.add("mcp")
+                tools = [*tool_registry.list_for(permissions), *mcp_tools]
+                available = {tool.name: tool for tool in tools}
                 schemas = [tool.to_openai() for tool in tools]
 
                 yield {
@@ -113,7 +119,7 @@ class WorkflowExecutor:
 
                     for call in calls:
                         output, step_status = await self._run_tool(
-                            db, run, call, permissions
+                            db, run, call, permissions, available
                         )
                         if ordinal >= MAX_PERSISTED_STEPS:
                             raise RuntimeError("Workflow exceeded its step budget")
@@ -186,8 +192,9 @@ class WorkflowExecutor:
         run: AgentRun,
         call: ToolCall,
         permissions: set[str],
+        available: dict[str, ToolSpec],
     ) -> tuple[str, str]:
-        tool = tool_registry.get(call.name)
+        tool = available.get(call.name)
         if tool is None or tool.permission not in permissions:
             return f"Tool not available: {call.name}", "error"
         if tool.requires_approval:
@@ -195,9 +202,23 @@ class WorkflowExecutor:
 
         try:
             output = await tool.handler(db, run.workspace_id, call.arguments)
-            return output, "completed"
+            status = "completed"
         except Exception as exc:
-            return f"Tool failed: {exc}", "error"
+            output, status = f"Tool failed: {exc}", "error"
+
+        if tool.permission == "mcp":
+            await audit_service.record(
+                db,
+                action="mcp.tool_call",
+                actor_id=run.user_id,
+                target=call.name,
+                details={
+                    "run_id": str(run.id),
+                    "tool": call.name,
+                    "status": status,
+                },
+            )
+        return output, status
 
     @staticmethod
     def _system_prompt(workflow: Workflow, skill: Any) -> str:
