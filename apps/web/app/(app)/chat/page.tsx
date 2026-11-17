@@ -149,9 +149,7 @@ export default function ChatPage() {
         disabledTools={disabledMcpTools}
         onToggleTool={(toolName, enabled) =>
           setDisabledMcpTools((current) =>
-            enabled
-              ? current.filter((name) => name !== toolName)
-              : [...current, toolName],
+            enabled ? current.filter((name) => name !== toolName) : [...current, toolName],
           )
         }
         onToggleServer={(server: McpStatusServer, enabled) => {
