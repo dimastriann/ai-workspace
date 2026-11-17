@@ -39,6 +39,25 @@
   margin-bottom: 12px;
 }
 
+.searchInput {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.searchInput:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
 .sessionList {
   display: flex;
   flex: 1;
@@ -459,8 +478,15 @@
   }
 }
 
-.copyButton {
+.messageActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
+}
+
+.copyButton {
+  margin-top: 0;
   padding: 3px 7px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -480,6 +506,16 @@
 
 .copyButton:hover {
   color: var(--color-text-primary);
+}
+
+.userAction {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.88);
+  opacity: 1;
+}
+
+.userAction:hover {
+  color: white;
 }
 
 .sources {
@@ -519,6 +555,29 @@
 .composerWrap {
   position: relative;
   width: 100%;
+}
+
+.editingBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.editingBanner button {
+  border: none;
+  background: transparent;
+  color: var(--color-primary-light);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
 }
 
 .composer {

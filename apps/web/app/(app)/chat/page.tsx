@@ -1,7 +1,14 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -61,7 +68,9 @@ export default function ChatPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const queryClient = useQueryClient();
   const { data: workspaces = [] } = useWorkspaces();
-  const { data: sessions = [] } = useChatSessions(workspaceId);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const deferredSearch = useDeferredValue(sessionSearch);
+  const { data: sessions = [] } = useChatSessions(workspaceId, deferredSearch);
   const deleteSession = useDeleteChatSession(workspaceId);
   const {
     messages,
@@ -71,6 +80,8 @@ export default function ChatPage() {
     sessionId,
     error,
     send,
+    regenerate,
+    editMessage,
     reset,
     stop,
     loadSession,
@@ -85,13 +96,16 @@ export default function ChatPage() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashError, setSlashError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const messageContainer = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: mcpStatus } = useMcpStatus(infoOpen);
 
   const slashQuery =
-    input.startsWith("/") && !input.includes(" ") ? input.slice(1).toLowerCase() : null;
+    !editingMessageId && input.startsWith("/") && !input.includes(" ")
+      ? input.slice(1).toLowerCase()
+      : null;
   const filteredCommands =
     slashQuery === null
       ? []
@@ -127,11 +141,15 @@ export default function ChatPage() {
     setSlashError(null);
     setHistoryOpen(false);
     setInput("");
+    setSessionSearch("");
+    setEditingMessageId(null);
   }
 
   async function openSession(id: string) {
     setHistoryOpen(false);
     setDisabledMcpTools([]);
+    setEditingMessageId(null);
+    setInput("");
     await loadSession(id);
   }
 
@@ -198,6 +216,14 @@ export default function ChatPage() {
       return;
     }
 
+    if (editingMessageId) {
+      setInput("");
+      setSlashError(null);
+      await editMessage(editingMessageId, content, disabledMcpTools);
+      setEditingMessageId(null);
+      return;
+    }
+
     if (content.startsWith("/") && !content.includes(" ")) {
       const command = SLASH_COMMANDS.find((item) => item.name === content.slice(1).toLowerCase());
       if (command) {
@@ -222,6 +248,22 @@ export default function ChatPage() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void submitMessage();
+  }
+
+  function startEditing(id: string, content: string) {
+    setEditingMessageId(id);
+    setInput(content);
+    setSlashError(null);
+    composerRef.current?.focus();
+  }
+
+  function cancelEditing() {
+    setEditingMessageId(null);
+    setInput("");
+  }
+
+  async function regenerateLast() {
+    await regenerate(disabledMcpTools);
   }
 
   async function copyMessage(id: string, content: string) {
@@ -268,9 +310,20 @@ export default function ChatPage() {
           New chat
         </Button>
 
+        <input
+          className={styles.searchInput}
+          type="search"
+          value={sessionSearch}
+          onChange={(event) => setSessionSearch(event.target.value)}
+          placeholder="Search chats..."
+          aria-label="Search chats"
+        />
+
         <nav className={styles.sessionList} aria-label="Chat history">
           {sessions.length === 0 ? (
-            <p className={styles.sessionEmpty}>No conversations yet.</p>
+            <p className={styles.sessionEmpty}>
+              {sessionSearch.trim() ? "No matching conversations." : "No conversations yet."}
+            </p>
           ) : (
             sessions.map((session) => (
               <div
@@ -386,7 +439,7 @@ export default function ChatPage() {
           ) : null}
 
           <div className={styles.messageList}>
-            {messages.map((message) => (
+            {messages.map((message, index) => (
               <div
                 key={message.id}
                 className={`${styles.messageRow} ${message.role === "user" ? styles.userRow : ""}`}
@@ -412,15 +465,38 @@ export default function ChatPage() {
                     <div className={styles.userText}>{message.content}</div>
                   )}
                   {message.role === "assistant" ? <SourceList sources={message.sources} /> : null}
-                  {message.role === "assistant" ? (
-                    <button
-                      type="button"
-                      className={styles.copyButton}
-                      onClick={() => void copyMessage(message.id, message.content)}
-                    >
-                      {copiedId === message.id ? "Copied" : "Copy"}
-                    </button>
-                  ) : null}
+                  <div className={styles.messageActions}>
+                    {message.role === "assistant" ? (
+                      <button
+                        type="button"
+                        className={styles.copyButton}
+                        onClick={() => void copyMessage(message.id, message.content)}
+                      >
+                        {copiedId === message.id ? "Copied" : "Copy"}
+                      </button>
+                    ) : null}
+                    {message.role === "assistant" &&
+                    sessionId &&
+                    index === messages.length - 1 &&
+                    !isStreaming ? (
+                      <button
+                        type="button"
+                        className={styles.copyButton}
+                        onClick={() => void regenerateLast()}
+                      >
+                        Regenerate
+                      </button>
+                    ) : null}
+                    {message.role === "user" && !isStreaming ? (
+                      <button
+                        type="button"
+                        className={`${styles.copyButton} ${styles.userAction}`}
+                        onClick={() => startEditing(message.id, message.content)}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ))}
@@ -479,6 +555,15 @@ export default function ChatPage() {
 
             {slashError ? <p className={styles.slashError}>{slashError}</p> : null}
 
+            {editingMessageId ? (
+              <div className={styles.editingBanner}>
+                <span>Editing message</span>
+                <button type="button" onClick={cancelEditing}>
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+
             <form className={styles.composer} onSubmit={handleSubmit}>
               <textarea
                 ref={composerRef}
@@ -490,7 +575,9 @@ export default function ChatPage() {
                   setSlashIndex(0);
                 }}
                 onKeyDown={handleComposerKeyDown}
-                placeholder="Message AI Workspace..."
+                placeholder={
+                  editingMessageId ? "Update your message..." : "Message AI Workspace..."
+                }
                 aria-label="Chat message"
                 role="combobox"
                 aria-autocomplete="list"
@@ -508,7 +595,7 @@ export default function ChatPage() {
                 </Button>
               ) : (
                 <Button type="submit" disabled={!input.trim()}>
-                  Send
+                  {editingMessageId ? "Update" : "Send"}
                 </Button>
               )}
             </form>

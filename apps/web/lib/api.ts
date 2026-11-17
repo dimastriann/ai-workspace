@@ -138,3 +138,33 @@ export async function proxyFile(path: string, request: Request): Promise<Respons
 
   return new Response(response.body, { status: response.status, headers });
 }
+
+export async function proxyStream(
+  path: string,
+  request: Request,
+  method = "POST",
+): Promise<Response> {
+  const body = await request.text();
+  const cookie = request.headers.get("cookie");
+  const upstream = await apiFetch(path, {
+    method,
+    body,
+    headers: cookie ? { cookie } : {},
+  });
+
+  if (!upstream.ok || !upstream.body) {
+    return new Response("Upstream stream failed", {
+      status: upstream.status || 502,
+    });
+  }
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    },
+  });
+}
