@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { McpServer, McpTestResult } from "@/lib/types";
+import type { McpServer, McpStatus, McpTestResult } from "@/lib/types";
 
 export const mcpKeys = {
   servers: ["mcp-servers"] as const,
+  status: ["mcp-status"] as const,
 };
 
 async function fetchServers(): Promise<McpServer[]> {
@@ -89,5 +90,40 @@ export function useTestMcpServer() {
       throw new Error("Failed to test MCP server");
     }
     return (await response.json()) as McpTestResult;
+  });
+}
+
+async function fetchStatus(): Promise<McpStatus> {
+  const response = await fetch("/api/mcp/status");
+  if (!response.ok) {
+    throw new Error("Failed to load MCP status");
+  }
+  return (await response.json()) as McpStatus;
+}
+
+export function useMcpStatus(enabled = true) {
+  return useQuery({
+    queryKey: mcpKeys.status,
+    queryFn: fetchStatus,
+    enabled,
+  });
+}
+
+export function useReconnectMcpServer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (serverId: string) => {
+      const response = await fetch(`/api/mcp/servers/${encodeURIComponent(serverId)}/reconnect`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to reconnect MCP server");
+      }
+      return (await response.json()) as McpTestResult;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mcpKeys.status });
+      void queryClient.invalidateQueries({ queryKey: mcpKeys.servers });
+    },
   });
 }

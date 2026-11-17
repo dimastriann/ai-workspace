@@ -1,0 +1,161 @@
+.hint {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.notice {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.servers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.server {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-tint);
+}
+
+.serverHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.serverInfo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.serverTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transport {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.status {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.ok {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.fail {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.error {
+  color: var(--color-error);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.serverActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.serverActions > button {
+  flex-shrink: 0;
+}
+
+.sessionToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.toolInfo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.toolInfo strong {
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+}
+
+.toolInfo span {
+  overflow-wrap: anywhere;
+}
+
+.toolInfo code {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.tool > button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .serverHeader {
+    flex-direction: column;
+  }
+
+  .serverActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

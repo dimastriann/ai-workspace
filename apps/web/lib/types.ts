@@ -175,3 +175,26 @@ export interface McpTestResult {
   tools: McpTool[];
   error: string | null;
 }
+
+export interface McpStatusTool {
+  name: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface McpStatusServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  enabled: boolean;
+  status: string | null;
+  error: string | null;
+  last_checked_at: string | null;
+  tools: McpStatusTool[];
+}
+
+export interface McpStatus {
+  feature_enabled: boolean;
+  servers: McpStatusServer[];
+}

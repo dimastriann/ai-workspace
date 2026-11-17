@@ -25,7 +25,7 @@ export function useChatStream() {
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (content: string, workspaceId: string | null) => {
+    async (content: string, workspaceId: string | null, disabledMcpTools: string[] = []) => {
       if (!content.trim() || isStreaming) {
         return;
       }
@@ -47,6 +47,7 @@ export function useChatStream() {
             message: content,
             session_id: sessionId,
             workspace_id: workspaceId,
+            disabled_mcp_tools: disabledMcpTools,
           }),
           signal: controller.signal,
         });

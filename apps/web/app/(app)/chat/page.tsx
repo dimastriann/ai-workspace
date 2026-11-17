@@ -2,10 +2,11 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { McpChatPanel } from "@/components/mcp-chat-panel";
 import { Button, Card } from "@/components/ui";
 import { useChatStream } from "@/lib/hooks/use-chat-stream";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
-import type { Source } from "@/lib/types";
+import type { McpStatusServer, Source } from "@/lib/types";
 
 import styles from "./page.module.css";
 
@@ -34,6 +35,8 @@ export default function ChatPage() {
   const { messages, streamingContent, streamingSources, isStreaming, error, send, reset } =
     useChatStream();
   const [input, setInput] = useState("");
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [disabledMcpTools, setDisabledMcpTools] = useState<string[]>([]);
   const messageContainer = useRef<HTMLDivElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content.
@@ -44,11 +47,24 @@ export default function ChatPage() {
     }
   }, [messages, streamingContent]);
 
+  function handleNewChat() {
+    reset();
+    setDisabledMcpTools([]);
+    setMcpOpen(false);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const content = input;
+    const content = input.trim();
+    if (!content) {
+      return;
+    }
     setInput("");
-    await send(content, workspaceId);
+    if (content.toLowerCase() === "/mcp") {
+      setMcpOpen(true);
+      return;
+    }
+    await send(content, workspaceId, disabledMcpTools);
   }
 
   return (
@@ -58,13 +74,13 @@ export default function ChatPage() {
         <p className={styles.secondary}>Interactive conversational AI with context awareness.</p>
       </header>
 
-      <Button variant="primary" className={styles.mobileNewChat} onClick={reset}>
+      <Button variant="primary" className={styles.mobileNewChat} onClick={handleNewChat}>
         + New Chat
       </Button>
 
       <div className={styles.chatLayout}>
         <aside className={`${styles.sessions} glass`}>
-          <Button variant="primary" className={styles.newChat} onClick={reset}>
+          <Button variant="primary" className={styles.newChat} onClick={handleNewChat}>
             + New Chat
           </Button>
           <div className={styles.sessionList} />
@@ -78,6 +94,9 @@ export default function ChatPage() {
                   ✨
                 </span>
                 <p>How can I help you today?</p>
+                <p className={styles.commandHint}>
+                  Type <code>/mcp</code> to inspect MCP tools.
+                </p>
               </div>
             ) : null}
 
@@ -114,7 +133,7 @@ export default function ChatPage() {
               className={styles.input}
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Type your message..."
+              placeholder="Message... or type /mcp"
               disabled={isStreaming}
             />
             <Button type="submit" loading={isStreaming} disabled={!input.trim()}>
@@ -123,6 +142,27 @@ export default function ChatPage() {
           </form>
         </Card>
       </div>
+
+      <McpChatPanel
+        open={mcpOpen}
+        onClose={() => setMcpOpen(false)}
+        disabledTools={disabledMcpTools}
+        onToggleTool={(toolName, enabled) =>
+          setDisabledMcpTools((current) =>
+            enabled
+              ? current.filter((name) => name !== toolName)
+              : [...current, toolName],
+          )
+        }
+        onToggleServer={(server: McpStatusServer, enabled) => {
+          const names = server.tools.map((tool) => tool.name);
+          setDisabledMcpTools((current) =>
+            enabled
+              ? current.filter((name) => !names.includes(name))
+              : Array.from(new Set([...current, ...names])),
+          );
+        }}
+      />
     </div>
   );
 }
