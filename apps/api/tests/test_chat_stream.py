@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import ChatMessage, ChatSession, Workspace
+from app.models.enums import Role
 from app.services.agent_provider import ProviderEvent, ToolCall
+from app.services.auth_service import auth_service
 from app.services.chat_service import ChatService
 from app.services.tools import ToolSpec
 
@@ -226,3 +228,82 @@ async def test_chat_filters_session_disabled_mcp_tools(
     assert seen
     tool_names = {tool.get("function", {}).get("name") for tool in seen[0]}
     assert "mcp__GitHub__list_issues" not in tool_names
+
+
+async def test_regenerate_replaces_last_assistant(db_session: AsyncSession) -> None:
+    workspace = Workspace(id=uuid.uuid4(), name="Test")
+    db_session.add(workspace)
+    await db_session.commit()
+    user = await auth_service.create_user(
+        email=f"regen-{uuid.uuid4()}@example.com",
+        password="password123",
+        role=Role.MEMBER,
+        db=db_session,
+    )
+    session = ChatSession(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        user_id=user.id,
+        title="Regenerate",
+    )
+    db_session.add(session)
+    db_session.add(ChatMessage(session_id=session.id, role="user", content="Question"))
+    db_session.add(
+        ChatMessage(session_id=session.id, role="assistant", content="Old answer")
+    )
+    await db_session.commit()
+
+    service = ChatService(provider=FakeProvider(["New answer"]))
+    tokens = [
+        token
+        async for token in service.regenerate_stream(session.id, db_session, user.id)
+    ]
+    assert "".join(tokens) == "New answer"
+
+    refreshed = await service.get_session(session.id, user.id, db_session)
+    assert [message.content for message in refreshed.messages] == [
+        "Question",
+        "New answer",
+    ]
+
+
+async def test_edit_message_truncates_later_turns(db_session: AsyncSession) -> None:
+    workspace = Workspace(id=uuid.uuid4(), name="Test")
+    db_session.add(workspace)
+    await db_session.commit()
+    user = await auth_service.create_user(
+        email=f"edit-{uuid.uuid4()}@example.com",
+        password="password123",
+        role=Role.MEMBER,
+        db=db_session,
+    )
+    session = ChatSession(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        user_id=user.id,
+        title="Edit",
+    )
+    db_session.add(session)
+    original = ChatMessage(
+        session_id=session.id, role="user", content="Original question"
+    )
+    db_session.add(original)
+    db_session.add(
+        ChatMessage(session_id=session.id, role="assistant", content="Old answer")
+    )
+    await db_session.commit()
+
+    service = ChatService(provider=FakeProvider(["Edited answer"]))
+    tokens = [
+        token
+        async for token in service.edit_message_stream(
+            session.id, original.id, "Edited question", db_session, user.id
+        )
+    ]
+    assert "".join(tokens) == "Edited answer"
+
+    refreshed = await service.get_session(session.id, user.id, db_session)
+    assert [message.content for message in refreshed.messages] == [
+        "Edited question",
+        "Edited answer",
+    ]

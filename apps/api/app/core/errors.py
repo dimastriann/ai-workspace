@@ -47,3 +47,7 @@ class McpValidationError(Exception):
 
 class ChatSessionNotFoundError(Exception):
     """The requested chat session does not exist."""
+
+
+class ChatValidationError(Exception):
+    """A chat operation cannot be performed."""

@@ -12,11 +12,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.core.errors import ChatSessionNotFoundError
+from app.core.errors import ChatSessionNotFoundError, ChatValidationError
 from app.dependencies import require_member, require_same_origin
 from app.models.chat import (
+    ChatEditRequest,
     ChatMessageItem,
     ChatMessageRequest,
+    ChatRegenerateRequest,
     ChatSessionDetail,
     ChatSessionRename,
     ChatSessionSummary,
@@ -57,11 +59,12 @@ def _session_detail(session: ChatSession) -> ChatSessionDetail:
 @router.get("/sessions", response_model=list[ChatSessionSummary])
 async def list_sessions(
     workspace_id: UUID | None = Query(None),
+    q: str | None = Query(None, max_length=200),
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_member),
 ) -> list[ChatSessionSummary]:
     """List the current user's chat sessions."""
-    rows = await chat_service.list_sessions(workspace_id, user.id, db)
+    rows = await chat_service.list_sessions(workspace_id, user.id, db, q)
     return [_session_summary(session, count) for session, count in rows]
 
 
@@ -114,6 +117,123 @@ async def delete_session(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/regenerate")
+async def regenerate(
+    body: ChatRegenerateRequest,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+    _: None = Depends(require_same_origin),
+):
+    """Regenerate the latest assistant response."""
+    session_id = UUID(body.session_id)
+    try:
+        session = await chat_service.get_session(session_id, user.id, db)
+    except ChatSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    if not session.messages or session.messages[-1].role != "assistant":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nothing to regenerate",
+        )
+
+    async def event_generator():
+        yield (
+            "data: "
+            + json.dumps({"session_id": str(session.id), "event": "start"})
+            + "\n\n"
+        )
+        yield 'data: {"event": "sources", "sources": []}\n\n'
+        try:
+            async for token in chat_service.regenerate_stream(
+                session.id,
+                db,
+                user.id,
+                body.disabled_mcp_tools,
+            ):
+                yield "data: " + json.dumps({"token": token}) + "\n\n"
+        except ChatValidationError as exc:
+            yield (
+                "data: " + json.dumps({"event": "error", "message": str(exc)}) + "\n\n"
+            )
+            return
+        yield 'data: {"event": "done"}\n\n'
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "cache-control": "no-cache, no-transform",
+            "x-accel-buffering": "no",
+        },
+    )
+
+
+@router.post("/messages/{message_id}/edit")
+async def edit_message(
+    message_id: UUID,
+    body: ChatEditRequest,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+    _: None = Depends(require_same_origin),
+):
+    """Edit a user message and regenerate the conversation from it."""
+    session_id = UUID(body.session_id)
+    try:
+        session = await chat_service.get_session(session_id, user.id, db)
+    except ChatSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    target = next(
+        (
+            message
+            for message in session.messages
+            if message.id == message_id and message.role == "user"
+        ),
+        None,
+    )
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User message not found",
+        )
+
+    async def event_generator():
+        yield (
+            "data: "
+            + json.dumps({"session_id": str(session.id), "event": "start"})
+            + "\n\n"
+        )
+        yield 'data: {"event": "sources", "sources": []}\n\n'
+        try:
+            async for token in chat_service.edit_message_stream(
+                session.id,
+                message_id,
+                body.message,
+                db,
+                user.id,
+                body.disabled_mcp_tools,
+            ):
+                yield "data: " + json.dumps({"token": token}) + "\n\n"
+        except ChatValidationError as exc:
+            yield (
+                "data: " + json.dumps({"event": "error", "message": str(exc)}) + "\n\n"
+            )
+            return
+        yield 'data: {"event": "done"}\n\n'
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "cache-control": "no-cache, no-transform",
+            "x-accel-buffering": "no",
+        },
+    )
 
 
 @router.post("/stream")

@@ -13,11 +13,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.errors import ChatSessionNotFoundError
+from app.core.errors import ChatSessionNotFoundError, ChatValidationError
 from app.models.database import ChatMessage, ChatSession
 from app.services.agent_provider import AgentProvider, ToolCall, get_provider
 from app.services.agent_service import DEFAULT_PERMISSIONS
@@ -127,6 +127,121 @@ class ChatService:
             session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
 
+        async for token in self._stream_completion(
+            messages,
+            session_id,
+            workspace_id,
+            db,
+            user_id,
+            disabled_mcp_tools,
+        ):
+            yield token
+
+    async def regenerate_stream(
+        self,
+        session_id: UUID,
+        db: AsyncSession,
+        user_id: UUID,
+        disabled_mcp_tools: list[str] | None = None,
+    ) -> AsyncGenerator[str]:
+        """Replace the latest assistant message with a fresh response."""
+        session = await self.get_session(session_id, user_id, db)
+        messages = list(session.messages)
+        if not messages or messages[-1].role != "assistant":
+            raise ChatValidationError("Nothing to regenerate")
+
+        await db.delete(messages[-1])
+        await db.commit()
+        messages = messages[:-1]
+
+        last_user = next(
+            (message for message in reversed(messages) if message.role == "user"),
+            None,
+        )
+        if last_user is None:
+            raise ChatValidationError("No user message to regenerate from")
+
+        context, _sources = (
+            await self.build_context(last_user.content, session.workspace_id, db)
+            if session.workspace_id
+            else ("", [])
+        )
+        system_msg = self._system_prompt(context)
+        history = self._history_from_messages(messages)
+        prompt = [
+            {"role": "system", "content": system_msg},
+            *history,
+        ]
+
+        async for token in self._stream_completion(
+            prompt,
+            session_id,
+            session.workspace_id,
+            db,
+            user_id,
+            disabled_mcp_tools,
+        ):
+            yield token
+
+    async def edit_message_stream(
+        self,
+        session_id: UUID,
+        message_id: UUID,
+        new_content: str,
+        db: AsyncSession,
+        user_id: UUID,
+        disabled_mcp_tools: list[str] | None = None,
+    ) -> AsyncGenerator[str]:
+        """Edit a user message, truncate later turns, and answer it again."""
+        session = await self.get_session(session_id, user_id, db)
+        messages = list(session.messages)
+        target_index = next(
+            (
+                index
+                for index, message in enumerate(messages)
+                if message.id == message_id and message.role == "user"
+            ),
+            None,
+        )
+        if target_index is None:
+            raise ChatValidationError("User message not found")
+
+        for message in messages[target_index + 1 :]:
+            await db.delete(message)
+        messages[target_index].content = new_content.strip()
+        session.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        await db.commit()
+
+        kept = messages[: target_index + 1]
+        context, _sources = (
+            await self.build_context(new_content, session.workspace_id, db)
+            if session.workspace_id
+            else ("", [])
+        )
+        prompt = [
+            {"role": "system", "content": self._system_prompt(context)},
+            *self._history_from_messages(kept),
+        ]
+
+        async for token in self._stream_completion(
+            prompt,
+            session_id,
+            session.workspace_id,
+            db,
+            user_id,
+            disabled_mcp_tools,
+        ):
+            yield token
+
+    async def _stream_completion(
+        self,
+        messages: list[dict[str, Any]],
+        session_id: UUID,
+        workspace_id: UUID | None,
+        db: AsyncSession,
+        user_id: UUID | None,
+        disabled_mcp_tools: list[str] | None,
+    ) -> AsyncGenerator[str]:
         permissions = set(DEFAULT_PERMISSIONS)
         disabled = set(disabled_mcp_tools or [])
         mcp_tools = [
@@ -190,7 +305,30 @@ class ChatService:
             session_id=session_id, role="assistant", content=full_response
         )
         db.add(assistant_msg)
+        session = await db.get(ChatSession, session_id)
+        if session is not None:
+            session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
+
+    @staticmethod
+    def _system_prompt(context: str) -> str:
+        system_msg = "You are a helpful AI assistant in the AI Workspace platform."
+        if context:
+            system_msg += (
+                "\n\nUse the following context from the documents to answer "
+                f"the user if relevant:\n{context}"
+            )
+        return system_msg
+
+    @staticmethod
+    def _history_from_messages(messages: list[ChatMessage]) -> list[dict[str, Any]]:
+        return [
+            {
+                "role": "user" if item.role == "user" else "assistant",
+                "content": item.content,
+            }
+            for item in messages[-10:]
+        ]
 
     async def _run_tool(
         self,
@@ -231,7 +369,11 @@ class ChatService:
         return output, status
 
     async def list_sessions(
-        self, workspace_id: UUID | None, user_id: UUID, db: AsyncSession
+        self,
+        workspace_id: UUID | None,
+        user_id: UUID,
+        db: AsyncSession,
+        query: str | None = None,
     ) -> list[tuple[ChatSession, int]]:
         """List a user's sessions with message counts."""
         statement = (
@@ -243,6 +385,18 @@ class ChatService:
         )
         if workspace_id is not None:
             statement = statement.where(ChatSession.workspace_id == workspace_id)
+        if query and query.strip():
+            pattern = f"%{query.strip()}%"
+            statement = statement.where(
+                or_(
+                    ChatSession.title.ilike(pattern),
+                    ChatSession.id.in_(
+                        select(ChatMessage.session_id).where(
+                            ChatMessage.content.ilike(pattern)
+                        )
+                    ),
+                )
+            )
         result = await db.execute(statement)
         return [(session, int(count)) for session, count in result.all()]
 

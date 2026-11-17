@@ -76,3 +76,18 @@ class ChatSessionRename(BaseModel):
     """Rename a chat session."""
 
     title: str = Field(..., min_length=1, max_length=255)
+
+
+class ChatRegenerateRequest(BaseModel):
+    """Regenerate the latest assistant response."""
+
+    session_id: str
+    disabled_mcp_tools: list[str] = Field(default_factory=list, max_length=200)
+
+
+class ChatEditRequest(BaseModel):
+    """Edit a user message and continue the conversation."""
+
+    session_id: str
+    message: str = Field(..., min_length=1, max_length=4000)
+    disabled_mcp_tools: list[str] = Field(default_factory=list, max_length=200)

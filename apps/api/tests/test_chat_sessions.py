@@ -46,6 +46,12 @@ async def test_chat_session_history(
     assert listed.json()[0]["title"] == "First conversation"
     assert listed.json()[0]["message_count"] == 1
 
+    search = await member_client.get("/api/chat/sessions", params={"q": "Hello"})
+    assert search.status_code == 200
+    assert len(search.json()) == 1
+    missing = await member_client.get("/api/chat/sessions", params={"q": "absent"})
+    assert missing.json() == []
+
     detail = await member_client.get(f"/api/chat/sessions/{session.id}")
     assert detail.status_code == 200
     assert detail.json()["messages"][0]["content"] == "Hello there"
