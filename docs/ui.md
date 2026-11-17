@@ -65,6 +65,8 @@ responsive as the app grows.
 - Chat history search matches session titles and message content.
 - Sessions are user-owned; never render another user's history.
 - On mobile, the history becomes a drawer with a backdrop and Escape/close support.
+- Rename conversations via a modal; deleting a conversation always requires a
+  confirmation dialog.
 
 ## Accessibility
 
