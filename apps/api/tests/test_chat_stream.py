@@ -170,3 +170,59 @@ async def test_chat_can_call_mcp_tools(db_session: AsyncSession, monkeypatch) ->
 
     assert seen == [{}]
     assert "".join(tokens) == "Here are your issues."
+
+
+async def test_chat_filters_session_disabled_mcp_tools(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    workspace = Workspace(id=uuid.uuid4(), name="Test")
+    db_session.add(workspace)
+    await db_session.commit()
+    session = ChatSession(id=uuid.uuid4(), workspace_id=workspace.id, title="Filtered")
+    db_session.add(session)
+    await db_session.commit()
+
+    seen: list[list[dict[str, Any]]] = []
+
+    class RecordingProvider(FakeProvider):
+        async def stream(
+            self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        ) -> AsyncGenerator[ProviderEvent]:
+            seen.append(tools)
+            async for event in super().stream(messages, tools):
+                yield event
+
+    async def handler(*args, **kwargs) -> str:
+        return "unused"
+
+    spec = ToolSpec(
+        name="mcp__GitHub__list_issues",
+        description="List issues",
+        parameters={"type": "object", "properties": {}},
+        permission="mcp",
+        handler=handler,
+    )
+
+    async def fake_list_tools(_db):
+        return [spec]
+
+    monkeypatch.setattr(
+        "app.services.chat_service.mcp_service.list_tool_specs", fake_list_tools
+    )
+
+    service = ChatService(provider=RecordingProvider(["ok"]))
+    _ = [
+        token
+        async for token in service.chat_stream(
+            "Hi",
+            session.id,
+            workspace.id,
+            db_session,
+            context="",
+            disabled_mcp_tools=[spec.name],
+        )
+    ]
+
+    assert seen
+    tool_names = {tool.get("function", {}).get("name") for tool in seen[0]}
+    assert "mcp__GitHub__list_issues" not in tool_names

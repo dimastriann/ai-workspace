@@ -73,6 +73,35 @@ class McpTestResponse(BaseModel):
     error: str | None = None
 
 
+class McpStatusTool(BaseModel):
+    """A tool exposed in the chat MCP panel."""
+
+    name: str
+    label: str
+    description: str = ""
+    enabled: bool = True
+
+
+class McpStatusServer(BaseModel):
+    """Server status for the chat MCP panel."""
+
+    id: str
+    name: str
+    transport: str
+    enabled: bool
+    status: str | None = None
+    error: str | None = None
+    last_checked_at: datetime | None = None
+    tools: list[McpStatusTool] = Field(default_factory=list)
+
+
+class McpStatusResponse(BaseModel):
+    """MCP availability for the current chat session."""
+
+    feature_enabled: bool
+    servers: list[McpStatusServer] = Field(default_factory=list)
+
+
 class McpToolCallRequest(BaseModel):
     """Arguments for a tool call."""
 

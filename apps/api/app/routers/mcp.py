@@ -7,16 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
 from app.core.errors import McpServerNotFoundError, McpValidationError
-from app.dependencies import require_admin, require_same_origin
+from app.dependencies import require_admin, require_member, require_same_origin
 from app.models.database import McpServer, User
 from app.models.mcp import (
     McpServerCreate,
     McpServerResponse,
     McpServerUpdate,
+    McpStatusResponse,
+    McpStatusServer,
+    McpStatusTool,
     McpTestResponse,
 )
 from app.services.audit_service import audit_service
 from app.services.mcp_service import mcp_service
+from app.services.settings_service import settings_service
 
 router = APIRouter()
 
@@ -47,6 +51,43 @@ def _json_list(value: str) -> list[str]:
         return [str(item) for item in parsed] if isinstance(parsed, list) else []
     except json.JSONDecodeError:
         return []
+
+
+@router.get("/status", response_model=McpStatusResponse)
+async def mcp_status(
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(require_member),
+) -> McpStatusResponse:
+    """Return MCP availability and cached tools for the chat panel."""
+    feature_enabled = bool(await settings_service.get("features.mcp", db))
+    servers = await mcp_service.list_servers(db)
+    status_servers: list[McpStatusServer] = []
+
+    for server in servers:
+        disabled = set(_json_list(server.disabled_tools))
+        tools = [
+            McpStatusTool(
+                name=mcp_service.tool_name(server.name, tool.name),
+                label=tool.name,
+                description=tool.description,
+                enabled=server.enabled and tool.name not in disabled,
+            )
+            for tool in mcp_service.cached_tools(server)
+        ]
+        status_servers.append(
+            McpStatusServer(
+                id=str(server.id),
+                name=server.name,
+                transport=server.transport,
+                enabled=server.enabled,
+                status=server.last_status,
+                error=server.last_error,
+                last_checked_at=server.last_checked_at,
+                tools=tools,
+            )
+        )
+
+    return McpStatusResponse(feature_enabled=feature_enabled, servers=status_servers)
 
 
 @router.get("/servers", response_model=list[McpServerResponse])
@@ -181,6 +222,33 @@ async def test_server(
         db,
         action="mcp.test",
         actor_id=admin.id,
+        target=str(server_id),
+        details={"ok": result.ok, "tools": len(result.tools)},
+        ip=request.client.host if request.client else None,
+    )
+    return result
+
+
+@router.post("/servers/{server_id}/reconnect", response_model=McpTestResponse)
+async def reconnect_server(
+    server_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+    _: None = Depends(require_same_origin),
+) -> McpTestResponse:
+    """Refresh a server's discovery cache for any member."""
+    try:
+        result = await mcp_service.test_server(server_id, db)
+    except McpServerNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    await audit_service.record(
+        db,
+        action="mcp.reconnect",
+        actor_id=user.id,
         target=str(server_id),
         details={"ok": result.ok, "tools": len(result.tools)},
         ip=request.client.host if request.client else None,

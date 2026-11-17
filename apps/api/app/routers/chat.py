@@ -61,6 +61,8 @@ async def chat_stream(
             workspace_id=workspace_id_uuid,
             db=db,
             context=context,
+            user_id=_user.id,
+            disabled_mcp_tools=request.disabled_mcp_tools,
         ):
             yield "data: " + json.dumps({"token": token}) + "\n\n"
 

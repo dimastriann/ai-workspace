@@ -81,6 +81,7 @@ class ChatService:
         db: AsyncSession,
         context: str | None = None,
         user_id: UUID | None = None,
+        disabled_mcp_tools: list[str] | None = None,
     ) -> AsyncGenerator[str]:
         """Stream a response, persisting the user and assistant messages."""
         if context is None:
@@ -108,7 +109,12 @@ class ChatService:
         await db.commit()
 
         permissions = set(DEFAULT_PERMISSIONS)
-        mcp_tools = await mcp_service.list_tool_specs(db)
+        disabled = set(disabled_mcp_tools or [])
+        mcp_tools = [
+            tool
+            for tool in await mcp_service.list_tool_specs(db)
+            if tool.name not in disabled
+        ]
         if mcp_tools:
             permissions.add("mcp")
         tools = [*tool_registry.list_for(permissions), *mcp_tools]

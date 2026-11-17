@@ -19,6 +19,11 @@ class ChatMessageRequest(BaseModel):
     workspace_id: str | None = Field(
         None, description="Workspace context for the conversation"
     )
+    disabled_mcp_tools: list[str] = Field(
+        default_factory=list,
+        max_length=200,
+        description="Namespaced MCP tools disabled for this chat message",
+    )
 
 
 class ChatMessageResponse(BaseModel):

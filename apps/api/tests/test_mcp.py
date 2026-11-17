@@ -1,6 +1,7 @@
 """Tests for MCP server configuration, discovery, and tool exposure."""
 
 import socket
+import time
 import uuid
 from typing import Any
 
@@ -238,3 +239,43 @@ async def test_mcp_tools_hidden_when_flag_off(
     monkeypatch.setattr(mcp_service, "discover", fake_discover)
 
     assert await mcp_service.list_tool_specs(db_session) == []
+
+
+@pytest.mark.asyncio
+async def test_member_can_view_status_and_reconnect(
+    member_client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = McpServer(
+        id=uuid.uuid4(),
+        name="GitHub",
+        transport="http",
+        url="https://example.com/mcp",
+        enabled=True,
+        timeout_seconds=10,
+        disabled_tools="[]",
+    )
+    db_session.add(server)
+    await db_session.commit()
+    mcp_service._cache[server.id] = (
+        time.monotonic(),
+        [McpToolInfo(name="list_issues", description="List issues")],
+    )
+
+    status = await member_client.get("/api/mcp/status")
+    assert status.status_code == 200
+    body = status.json()
+    assert body["servers"][0]["name"] == "GitHub"
+    assert body["servers"][0]["tools"][0]["name"] == "mcp__GitHub__list_issues"
+    assert body["servers"][0]["tools"][0]["label"] == "list_issues"
+
+    async def fake_discover(config: Any) -> list[McpToolInfo]:
+        del config
+        return [McpToolInfo(name="create_issue", description="Create issue")]
+
+    monkeypatch.setattr(mcp_service, "discover", fake_discover)
+    reconnect = await member_client.post(f"/api/mcp/servers/{server.id}/reconnect")
+    assert reconnect.status_code == 200
+    assert reconnect.json()["ok"] is True
+    assert reconnect.json()["tools"][0]["name"] == "create_issue"

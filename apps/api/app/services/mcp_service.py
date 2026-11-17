@@ -205,6 +205,16 @@ class McpService:
             output = f"MCP tool error: {output}"
         return output[:MAX_TOOL_OUTPUT]
 
+    def cached_tools(self, server: McpServer) -> list[McpToolInfo]:
+        """Return cached discovered tools without making a network call."""
+        cached = self._cache.get(server.id)
+        return list(cached[1]) if cached else []
+
+    @staticmethod
+    def tool_name(server_name: str, tool_name: str) -> str:
+        """Return the namespaced tool name used by agents."""
+        return f"mcp__{_tool_slug(server_name)}__{_tool_slug(tool_name)}"
+
     async def list_tool_specs(self, db: AsyncSession) -> list[ToolSpec]:
         """Return enabled MCP tools when the feature flag is on."""
         if not await settings_service.get("features.mcp", db):
@@ -228,7 +238,7 @@ class McpService:
             for tool in tools:
                 if tool.name in config.disabled_tools:
                     continue
-                name = f"mcp__{_tool_slug(server.name)}__{_tool_slug(tool.name)}"
+                name = self.tool_name(server.name, tool.name)
                 specs.append(
                     ToolSpec(
                         name=name,
