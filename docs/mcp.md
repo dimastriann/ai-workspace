@@ -31,6 +31,16 @@ gateway that exposes a remote MCP URL, then register that URL here.
 - **Tools:** all discovered tools are enabled by default; disable individual tools from the
   **Test** dialog.
 
+## Using MCP in chat
+
+Type `/mcp` in AI Chat to open the MCP panel. It shows configured servers, connection
+status, and discovered tools.
+
+- Toggles apply to the **current chat session only**; a new chat resets them.
+- **Reconnect** refreshes discovery and is available to members.
+- Members can view status and tools; only admins can change global server configuration.
+- The panel never exposes auth header values.
+
 ## Behaviour
 
 - Tools are namespaced per server to avoid collisions.
