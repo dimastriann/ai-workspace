@@ -51,6 +51,18 @@ responsive as the app grows.
 - Destructive actions require a confirm `Modal` that names the target and the consequence.
 - Status is conveyed with text and color, not color alone.
 
+## Chat workspace
+
+- Use the ChatGPT-style layout: conversation history sidebar, centered thread, and a
+  sticky multiline composer.
+- Composer: Enter sends, Shift+Enter inserts a newline, Stop aborts streaming.
+- Slash commands open a keyboard-accessible palette; `/mcp`, `/info`, `/help`, `/clear`,
+  and `/new` are local commands and must not be sent to the model.
+- Render assistant Markdown with a safe renderer (no raw HTML), including code blocks,
+  lists, tables, and links. Sources and copy actions stay visible.
+- Sessions are user-owned; never render another user's history.
+- On mobile, the history becomes a drawer with a backdrop and Escape/close support.
+
 ## Accessibility
 
 - Every control is keyboard reachable and has a visible `:focus-visible` outline.
