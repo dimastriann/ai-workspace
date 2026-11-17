@@ -60,6 +60,9 @@ responsive as the app grows.
   and `/new` are local commands and must not be sent to the model.
 - Render assistant Markdown with a safe renderer (no raw HTML), including code blocks,
   lists, tables, and links. Sources and copy actions stay visible.
+- The latest assistant response supports Regenerate; user messages support Edit, which
+  truncates later turns and resubmits the edited message.
+- Chat history search matches session titles and message content.
 - Sessions are user-owned; never render another user's history.
 - On mobile, the history becomes a drawer with a backdrop and Escape/close support.
 
