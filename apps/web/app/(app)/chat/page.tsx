@@ -1,10 +1,18 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { McpChatPanel } from "@/components/mcp-chat-panel";
-import { Button, Card, Modal } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useChatStream } from "@/lib/hooks/use-chat-stream";
+import {
+  chatSessionKeys,
+  useChatSessions,
+  useDeleteChatSession,
+} from "@/lib/queries/chat-sessions";
 import { useMcpStatus } from "@/lib/queries/mcp";
 import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
@@ -21,6 +29,13 @@ const SLASH_COMMANDS = [
 ] as const;
 
 type SlashCommandName = (typeof SLASH_COMMANDS)[number]["name"];
+
+const SUGGESTIONS = [
+  "Summarize the documents in this workspace",
+  "Find the most relevant information about...",
+  "Draft a short plan for...",
+  "What MCP tools are available?",
+];
 
 function SourceList({ sources }: { sources?: Source[] }) {
   if (!sources?.length) {
@@ -44,6 +59,10 @@ function SourceList({ sources }: { sources?: Source[] }) {
 
 export default function ChatPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const queryClient = useQueryClient();
+  const { data: workspaces = [] } = useWorkspaces();
+  const { data: sessions = [] } = useChatSessions(workspaceId);
+  const deleteSession = useDeleteChatSession(workspaceId);
   const {
     messages,
     streamingContent,
@@ -53,16 +72,22 @@ export default function ChatPage() {
     error,
     send,
     reset,
+    stop,
+    loadSession,
   } = useChatStream();
+
   const [input, setInput] = useState("");
   const [mcpOpen, setMcpOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [disabledMcpTools, setDisabledMcpTools] = useState<string[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashError, setSlashError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messageContainer = useRef<HTMLDivElement>(null);
-  const { data: workspaces = [] } = useWorkspaces();
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
   const { data: mcpStatus } = useMcpStatus(infoOpen);
 
   const slashQuery =
@@ -73,6 +98,7 @@ export default function ChatPage() {
       : SLASH_COMMANDS.filter((command) => command.name.startsWith(slashQuery));
   const slashOpen = slashQuery !== null && filteredCommands.length > 0 && !isStreaming;
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
+  const currentSession = sessions.find((session) => session.id === sessionId);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content.
   useEffect(() => {
@@ -82,12 +108,38 @@ export default function ChatPage() {
     }
   }, [messages, streamingContent]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resize with input.
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+  }, [input]);
+
   function handleNewChat() {
     reset();
     setDisabledMcpTools([]);
     setMcpOpen(false);
     setInfoOpen(false);
     setHelpOpen(false);
+    setSlashError(null);
+    setHistoryOpen(false);
+    setInput("");
+  }
+
+  async function openSession(id: string) {
+    setHistoryOpen(false);
+    setDisabledMcpTools([]);
+    await loadSession(id);
+  }
+
+  async function removeSession(id: string) {
+    await deleteSession.mutateAsync(id);
+    if (sessionId === id) {
+      handleNewChat();
+    }
   }
 
   function runCommand(command: SlashCommandName) {
@@ -112,28 +164,37 @@ export default function ChatPage() {
     }
   }
 
-  function handleComposerKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (!slashOpen) {
-      return;
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (slashOpen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        setSlashIndex(
+          (index) => (index + delta + filteredCommands.length) % filteredCommands.length,
+        );
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        runCommand(filteredCommands[slashIndex].name);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setInput("");
+        return;
+      }
     }
 
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      setSlashIndex((index) => (index + delta + filteredCommands.length) % filteredCommands.length);
-    } else if (event.key === "Enter" || event.key === "Tab") {
-      event.preventDefault();
-      runCommand(filteredCommands[slashIndex].name);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setInput("");
+      void submitMessage();
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitMessage() {
     const content = input.trim();
-    if (!content) {
+    if (!content || isStreaming) {
       return;
     }
 
@@ -151,69 +212,242 @@ export default function ChatPage() {
     setInput("");
     setSlashError(null);
     await send(content, workspaceId, disabledMcpTools);
+    if (workspaceId) {
+      await queryClient.invalidateQueries({
+        queryKey: chatSessionKeys.byWorkspace(workspaceId),
+      });
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitMessage();
+  }
+
+  async function copyMessage(id: string, content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      setCopiedId(null);
+    }
+  }
+
+  function applySuggestion(text: string) {
+    setInput(text);
+    composerRef.current?.focus();
   }
 
   return (
-    <div className={styles.container}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>AI Chat</h1>
-        <p className={styles.secondary}>Interactive conversational AI with context awareness.</p>
-      </header>
+    <div className={styles.page}>
+      <aside className={`${styles.history} ${historyOpen ? styles.historyOpen : ""}`}>
+        <div className={styles.historyHeader}>
+          <span>Chats</span>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Close chat history"
+            onClick={() => setHistoryOpen(false)}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-      <Button variant="primary" className={styles.mobileNewChat} onClick={handleNewChat}>
-        + New Chat
-      </Button>
+        <Button className={styles.newChat} onClick={handleNewChat}>
+          New chat
+        </Button>
 
-      <div className={styles.chatLayout}>
-        <aside className={`${styles.sessions} glass`}>
-          <Button variant="primary" className={styles.newChat} onClick={handleNewChat}>
-            + New Chat
-          </Button>
-          <div className={styles.sessionList} />
-        </aside>
-
-        <Card className={`${styles.chatWrapper} glass`}>
-          <div ref={messageContainer} className={styles.messages}>
-            {messages.length === 0 && !isStreaming ? (
-              <div className={styles.empty}>
-                <span className={styles.emptyIcon} aria-hidden="true">
-                  ✨
-                </span>
-                <p>How can I help you today?</p>
-                <p className={styles.commandHint}>
-                  Type <code>/mcp</code> to inspect MCP tools.
-                </p>
+        <nav className={styles.sessionList} aria-label="Chat history">
+          {sessions.length === 0 ? (
+            <p className={styles.sessionEmpty}>No conversations yet.</p>
+          ) : (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                className={`${styles.sessionRow} ${
+                  session.id === sessionId ? styles.sessionActive : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  className={styles.sessionSelect}
+                  onClick={() => void openSession(session.id)}
+                >
+                  <span className={styles.sessionTitle}>{session.title}</span>
+                  <span className={styles.sessionMeta}>{session.message_count} messages</span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.sessionDelete}
+                  aria-label={`Delete ${session.title}`}
+                  onClick={() => void removeSession(session.id)}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
+                  </svg>
+                </button>
               </div>
-            ) : null}
+            ))
+          )}
+        </nav>
 
+        <div className={styles.historyFooter}>
+          <span>{currentWorkspace?.name ?? "No workspace"}</span>
+          <button type="button" className={styles.footerCommand} onClick={() => setMcpOpen(true)}>
+            /mcp tools
+          </button>
+        </div>
+      </aside>
+
+      {historyOpen ? (
+        <button
+          type="button"
+          className={styles.historyOverlay}
+          aria-label="Close chat history"
+          onClick={() => setHistoryOpen(false)}
+        />
+      ) : null}
+
+      <section className={styles.thread}>
+        <header className={styles.threadHeader}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Open chat history"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
+          <div className={styles.threadTitle}>
+            <strong>{currentSession?.title ?? "New chat"}</strong>
+            <span>{currentWorkspace?.name ?? "No workspace selected"}</span>
+          </div>
+
+          <Button size="sm" variant="ghost" onClick={() => setMcpOpen(true)}>
+            MCP
+          </Button>
+        </header>
+
+        <div ref={messageContainer} className={styles.messages}>
+          {messages.length === 0 && !isStreaming ? (
+            <div className={styles.empty}>
+              <div className={styles.emptyMark} aria-hidden="true">
+                AI
+              </div>
+              <h1 className={styles.emptyTitle}>How can I help you today?</h1>
+              <p className={styles.emptySubtitle}>
+                Ask about your workspace documents, run tools, or type <code>/</code> for commands.
+              </p>
+              <div className={styles.suggestions}>
+                {SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className={styles.suggestion}
+                    onClick={() => applySuggestion(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className={styles.messageList}>
             {messages.map((message) => (
-              <div key={message.id} className={`${styles.message} ${styles[message.role]}`}>
-                <div className={styles.messageContent}>
-                  <div className={styles.roleBadge}>{message.role === "user" ? "You" : "AI"}</div>
-                  <div className={styles.text}>{message.content}</div>
+              <div
+                key={message.id}
+                className={`${styles.messageRow} ${message.role === "user" ? styles.userRow : ""}`}
+              >
+                {message.role === "assistant" ? (
+                  <div className={styles.avatar} aria-hidden="true">
+                    AI
+                  </div>
+                ) : null}
+                <div
+                  className={`${styles.messageBody} ${
+                    message.role === "user" ? styles.userBody : ""
+                  }`}
+                >
+                  <div className={styles.messageMeta}>
+                    {message.role === "user" ? "You" : "AI Workspace"}
+                  </div>
+                  {message.role === "assistant" ? (
+                    <div className={styles.markdown}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className={styles.userText}>{message.content}</div>
+                  )}
+                  {message.role === "assistant" ? <SourceList sources={message.sources} /> : null}
+                  {message.role === "assistant" ? (
+                    <button
+                      type="button"
+                      className={styles.copyButton}
+                      onClick={() => void copyMessage(message.id, message.content)}
+                    >
+                      {copiedId === message.id ? "Copied" : "Copy"}
+                    </button>
+                  ) : null}
                 </div>
-                {message.role === "assistant" ? <SourceList sources={message.sources} /> : null}
               </div>
             ))}
 
             {isStreaming ? (
-              <div className={`${styles.message} ${styles.assistant}`}>
-                <div className={styles.messageContent}>
-                  <div className={styles.roleBadge}>AI</div>
-                  <div className={styles.text}>
-                    {streamingContent}
+              <div className={`${styles.messageRow} ${styles.assistantRow}`}>
+                <div className={styles.avatar} aria-hidden="true">
+                  AI
+                </div>
+                <div className={styles.messageBody}>
+                  <div className={styles.messageMeta}>AI Workspace</div>
+                  <div className={styles.markdown}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                     <span className={styles.cursor} aria-hidden="true">
                       |
                     </span>
                   </div>
+                  <SourceList sources={streamingSources} />
                 </div>
-                <SourceList sources={streamingSources} />
               </div>
             ) : null}
-
-            {error ? <div className={styles.error}>{error}</div> : null}
           </div>
 
+          {error ? <div className={styles.error}>{error}</div> : null}
+        </div>
+
+        <div className={styles.composerArea}>
           <div className={styles.composerWrap}>
             {slashOpen ? (
               <div
@@ -245,9 +479,10 @@ export default function ChatPage() {
 
             {slashError ? <p className={styles.slashError}>{slashError}</p> : null}
 
-            <form className={styles.inputArea} onSubmit={handleSubmit}>
-              <input
-                className={styles.input}
+            <form className={styles.composer} onSubmit={handleSubmit}>
+              <textarea
+                ref={composerRef}
+                className={styles.composerInput}
                 value={input}
                 onChange={(event) => {
                   setInput(event.target.value);
@@ -255,7 +490,7 @@ export default function ChatPage() {
                   setSlashIndex(0);
                 }}
                 onKeyDown={handleComposerKeyDown}
-                placeholder="Message... or type /"
+                placeholder="Message AI Workspace..."
                 aria-label="Chat message"
                 role="combobox"
                 aria-autocomplete="list"
@@ -264,15 +499,25 @@ export default function ChatPage() {
                 aria-activedescendant={
                   slashOpen ? `slash-command-${filteredCommands[slashIndex]?.name}` : undefined
                 }
+                rows={1}
                 disabled={isStreaming}
               />
-              <Button type="submit" loading={isStreaming} disabled={!input.trim()}>
-                Send
-              </Button>
+              {isStreaming ? (
+                <Button type="button" variant="secondary" onClick={stop}>
+                  Stop
+                </Button>
+              ) : (
+                <Button type="submit" disabled={!input.trim()}>
+                  Send
+                </Button>
+              )}
             </form>
           </div>
-        </Card>
-      </div>
+          <p className={styles.composerHint}>
+            Enter to send, Shift+Enter for a new line. Type <code>/</code> for commands.
+          </p>
+        </div>
+      </section>
 
       <McpChatPanel
         open={mcpOpen}

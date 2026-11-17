@@ -198,3 +198,23 @@ export interface McpStatus {
   feature_enabled: boolean;
   servers: McpStatusServer[];
 }
+
+export interface ChatMessageRecord {
+  id: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  workspace_id: string | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionDetail extends ChatSessionSummary {
+  messages: ChatMessageRecord[];
+}

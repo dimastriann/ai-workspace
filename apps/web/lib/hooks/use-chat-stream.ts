@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import type { ChatMessage, ChatRole, Source } from "@/lib/types";
+import type { ChatMessage, ChatRole, ChatSessionDetail, Source } from "@/lib/types";
 
 interface StreamPayload {
   token?: string;
@@ -123,11 +123,38 @@ export function useChatStream() {
     [isStreaming, sessionId],
   );
 
+  const loadSession = useCallback(async (id: string) => {
+    abortRef.current?.abort();
+    setError(null);
+    setStreamingContent("");
+    setStreamingSources([]);
+    setIsStreaming(false);
+
+    const response = await fetch(`/api/chat/sessions/${encodeURIComponent(id)}`);
+    if (!response.ok) {
+      setError("Could not load that conversation.");
+      return;
+    }
+    const data = (await response.json()) as ChatSessionDetail;
+    setSessionId(data.id);
+    setMessages(
+      data.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        sources: [],
+      })),
+    );
+  }, []);
+
   const stop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
   const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsStreaming(false);
     setMessages([]);
     setStreamingContent("");
     setStreamingSources([]);
@@ -145,5 +172,6 @@ export function useChatStream() {
     send,
     stop,
     reset,
+    loadSession,
   };
 }
