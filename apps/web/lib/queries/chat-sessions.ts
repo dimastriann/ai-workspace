@@ -35,6 +35,28 @@ export function useChatSessions(workspaceId: string | null, query = "") {
   });
 }
 
+export function useRenameChatSession(workspaceId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; title: string }) => {
+      const response = await fetch(`/api/chat/sessions/${encodeURIComponent(input.sessionId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: input.title }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to rename chat session");
+      }
+      return (await response.json()) as ChatSessionSummary;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["chat-sessions", workspaceId ?? ""],
+      });
+    },
+  });
+}
+
 export function useDeleteChatSession(workspaceId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -19,11 +19,12 @@ import {
   chatSessionKeys,
   useChatSessions,
   useDeleteChatSession,
+  useRenameChatSession,
 } from "@/lib/queries/chat-sessions";
 import { useMcpStatus } from "@/lib/queries/mcp";
 import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
-import type { McpStatusServer, Source } from "@/lib/types";
+import type { ChatSessionSummary, McpStatusServer, Source } from "@/lib/types";
 
 import styles from "./page.module.css";
 
@@ -72,6 +73,7 @@ export default function ChatPage() {
   const deferredSearch = useDeferredValue(sessionSearch);
   const { data: sessions = [] } = useChatSessions(workspaceId, deferredSearch);
   const deleteSession = useDeleteChatSession(workspaceId);
+  const renameSession = useRenameChatSession(workspaceId);
   const {
     messages,
     streamingContent,
@@ -97,6 +99,10 @@ export default function ChatPage() {
   const [slashError, setSlashError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [renamingSession, setRenamingSession] = useState<ChatSessionSummary | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [pendingDeleteSession, setPendingDeleteSession] = useState<ChatSessionSummary | null>(null);
+  const [sessionActionError, setSessionActionError] = useState<string | null>(null);
   const messageContainer = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -153,10 +159,51 @@ export default function ChatPage() {
     await loadSession(id);
   }
 
-  async function removeSession(id: string) {
-    await deleteSession.mutateAsync(id);
-    if (sessionId === id) {
-      handleNewChat();
+  function openRenameSession(session: ChatSessionSummary) {
+    setRenamingSession(session);
+    setRenameValue(session.title);
+    setSessionActionError(null);
+  }
+
+  async function handleRenameSession() {
+    if (!renamingSession) {
+      return;
+    }
+    const title = renameValue.trim();
+    if (!title) {
+      setSessionActionError("Title is required.");
+      return;
+    }
+    try {
+      await renameSession.mutateAsync({
+        sessionId: renamingSession.id,
+        title,
+      });
+      setRenamingSession(null);
+      setSessionActionError(null);
+    } catch {
+      setSessionActionError("Could not rename the conversation.");
+    }
+  }
+
+  function openDeleteSession(session: ChatSessionSummary) {
+    setPendingDeleteSession(session);
+    setSessionActionError(null);
+  }
+
+  async function confirmDeleteSession() {
+    if (!pendingDeleteSession) {
+      return;
+    }
+    try {
+      await deleteSession.mutateAsync(pendingDeleteSession.id);
+      if (sessionId === pendingDeleteSession.id) {
+        handleNewChat();
+      }
+      setPendingDeleteSession(null);
+      setSessionActionError(null);
+    } catch {
+      setSessionActionError("Could not delete the conversation.");
     }
   }
 
@@ -340,24 +387,45 @@ export default function ChatPage() {
                   <span className={styles.sessionTitle}>{session.title}</span>
                   <span className={styles.sessionMeta}>{session.message_count} messages</span>
                 </button>
-                <button
-                  type="button"
-                  className={styles.sessionDelete}
-                  aria-label={`Delete ${session.title}`}
-                  onClick={() => void removeSession(session.id)}
-                >
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
+                <span className={styles.sessionActions}>
+                  <button
+                    type="button"
+                    className={styles.sessionAction}
+                    aria-label={`Rename ${session.title}`}
+                    onClick={() => openRenameSession(session)}
                   >
-                    <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
-                  </svg>
-                </button>
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.sessionAction}
+                    aria-label={`Delete ${session.title}`}
+                    onClick={() => openDeleteSession(session)}
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
+                    </svg>
+                  </button>
+                </span>
               </div>
             ))
           )}
@@ -685,6 +753,60 @@ export default function ChatPage() {
             </li>
           ))}
         </ul>
+      </Modal>
+
+      <Modal
+        open={Boolean(renamingSession)}
+        onClose={() => setRenamingSession(null)}
+        title="Rename conversation"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRenamingSession(null)}>
+              Cancel
+            </Button>
+            <Button loading={renameSession.isPending} onClick={() => void handleRenameSession()}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <label className={styles.renameField}>
+          <span>Title</span>
+          <input
+            className={styles.renameInput}
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            maxLength={255}
+            aria-label="Conversation title"
+          />
+        </label>
+        {sessionActionError ? <p className={styles.error}>{sessionActionError}</p> : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingDeleteSession)}
+        onClose={() => setPendingDeleteSession(null)}
+        title="Delete conversation"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingDeleteSession(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteSession.isPending}
+              onClick={() => void confirmDeleteSession()}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Delete <strong>{pendingDeleteSession?.title}</strong>? This removes the conversation and
+          all of its messages.
+        </p>
+        {sessionActionError ? <p className={styles.error}>{sessionActionError}</p> : null}
       </Modal>
     </div>
   );

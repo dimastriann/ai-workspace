@@ -39,6 +39,32 @@
   margin-bottom: 12px;
 }
 
+.renameField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.renameInput {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.renameInput:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
 .searchInput {
   width: 100%;
   margin-bottom: 10px;
@@ -112,9 +138,21 @@
   font-size: 0.68rem;
 }
 
-.sessionDelete {
+.sessionActions {
   display: none;
   flex-shrink: 0;
+  gap: 2px;
+}
+
+.sessionRow:hover .sessionActions,
+.sessionRow:focus-within .sessionActions {
+  display: inline-flex;
+}
+
+.sessionAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px;
   border: none;
   border-radius: var(--radius-sm);
@@ -123,14 +161,13 @@
   cursor: pointer;
 }
 
-.sessionRow:hover .sessionDelete,
-.sessionRow:focus-within .sessionDelete {
-  display: inline-flex;
+.sessionAction:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
 }
 
-.sessionDelete:hover {
+.sessionAction:last-child:hover {
   color: var(--color-error);
-  background: var(--color-bg-secondary);
 }
 
 .historyFooter {
@@ -748,7 +785,7 @@
 }
 
 @media (max-width: 900px) {
-  .sessionDelete {
+  .sessionActions {
     display: inline-flex;
   }
 
