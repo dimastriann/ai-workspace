@@ -44,3 +44,35 @@ class ChatSession(BaseModel):
     message_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class ChatMessageItem(BaseModel):
+    """A persisted chat message."""
+
+    id: str
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ChatSessionSummary(BaseModel):
+    """Chat session metadata for the history sidebar."""
+
+    id: str
+    title: str
+    workspace_id: str | None = None
+    message_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatSessionDetail(ChatSessionSummary):
+    """A session with its persisted messages."""
+
+    messages: list[ChatMessageItem] = Field(default_factory=list)
+
+
+class ChatSessionRename(BaseModel):
+    """Rename a chat session."""
+
+    title: str = Field(..., min_length=1, max_length=255)

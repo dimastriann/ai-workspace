@@ -43,3 +43,7 @@ class McpServerNotFoundError(Exception):
 
 class McpValidationError(Exception):
     """An MCP server configuration is invalid."""
+
+
+class ChatSessionNotFoundError(Exception):
+    """The requested chat session does not exist."""

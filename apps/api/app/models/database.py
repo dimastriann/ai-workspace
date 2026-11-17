@@ -128,6 +128,9 @@ class ChatSession(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
 
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
 

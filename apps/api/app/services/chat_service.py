@@ -9,12 +9,15 @@ Orchestrates the conversational AI logic:
 
 import json
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.core.errors import ChatSessionNotFoundError
 from app.models.database import ChatMessage, ChatSession
 from app.services.agent_provider import AgentProvider, ToolCall, get_provider
 from app.services.agent_service import DEFAULT_PERMISSIONS
@@ -31,20 +34,31 @@ class ChatService:
         self._provider = provider or get_provider()
 
     async def get_or_create_session(
-        self, session_id: UUID | None, workspace_id: UUID | None, db: AsyncSession
+        self,
+        session_id: UUID | None,
+        workspace_id: UUID | None,
+        db: AsyncSession,
+        user_id: UUID | None = None,
     ) -> ChatSession:
-        """Fetch an existing session or create a new one."""
+        """Fetch an existing owned session or create a new one."""
         if session_id:
             result = await db.execute(
                 select(ChatSession).where(ChatSession.id == session_id)
             )
             session = result.scalar_one_or_none()
-            if session:
+            if session and (user_id is None or session.user_id in (None, user_id)):
+                if user_id is not None and session.user_id is None:
+                    session.user_id = user_id
+                    await db.commit()
                 return session
+            if session is not None:
+                # Never reuse another user's session id.
+                session_id = None
 
         new_session = ChatSession(
             id=session_id or uuid4(),
             workspace_id=workspace_id,
+            user_id=user_id,
             title="New Conversation",
         )
         db.add(new_session)
@@ -106,6 +120,11 @@ class ChatService:
 
         user_msg = ChatMessage(session_id=session_id, role="user", content=message)
         db.add(user_msg)
+        session = await db.get(ChatSession, session_id)
+        if session is not None:
+            if session.title == "New Conversation":
+                session.title = message.strip()[:80]
+            session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
 
         permissions = set(DEFAULT_PERMISSIONS)
@@ -210,6 +229,56 @@ class ChatService:
                 },
             )
         return output, status
+
+    async def list_sessions(
+        self, workspace_id: UUID | None, user_id: UUID, db: AsyncSession
+    ) -> list[tuple[ChatSession, int]]:
+        """List a user's sessions with message counts."""
+        statement = (
+            select(ChatSession, func.count(ChatMessage.id))
+            .outerjoin(ChatMessage, ChatMessage.session_id == ChatSession.id)
+            .where(ChatSession.user_id == user_id)
+            .group_by(ChatSession.id)
+            .order_by(ChatSession.updated_at.desc())
+        )
+        if workspace_id is not None:
+            statement = statement.where(ChatSession.workspace_id == workspace_id)
+        result = await db.execute(statement)
+        return [(session, int(count)) for session, count in result.all()]
+
+    async def get_session(
+        self, session_id: UUID, user_id: UUID, db: AsyncSession
+    ) -> ChatSession:
+        """Load an owned session with messages."""
+        result = await db.execute(
+            select(ChatSession)
+            .options(selectinload(ChatSession.messages))
+            .where(ChatSession.id == session_id)
+            .execution_options(populate_existing=True)
+        )
+        session = result.scalar_one_or_none()
+        if session is None or session.user_id != user_id:
+            raise ChatSessionNotFoundError("Chat session not found")
+        return session
+
+    async def rename_session(
+        self, session_id: UUID, title: str, user_id: UUID, db: AsyncSession
+    ) -> ChatSession:
+        """Rename an owned session."""
+        session = await self.get_session(session_id, user_id, db)
+        session.title = title.strip()
+        await db.commit()
+        await db.refresh(session)
+        return session
+
+    async def delete_session(
+        self, session_id: UUID, user_id: UUID, db: AsyncSession
+    ) -> ChatSession:
+        """Delete an owned session and its messages."""
+        session = await self.get_session(session_id, user_id, db)
+        await db.delete(session)
+        await db.commit()
+        return session
 
     async def _get_history(
         self, session_id: UUID, db: AsyncSession
