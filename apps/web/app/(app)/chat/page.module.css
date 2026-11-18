@@ -236,6 +236,11 @@
   outline-offset: 2px;
 }
 
+.modelPicker {
+  width: 150px;
+  flex-shrink: 0;
+}
+
 .threadTitle {
   display: flex;
   flex: 1;
@@ -545,6 +550,34 @@
   color: var(--color-text-primary);
 }
 
+.branchControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+
+.branchButton {
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.branchButton:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.branchButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .userAction {
   border-color: rgba(255, 255, 255, 0.4);
   color: rgba(255, 255, 255, 0.88);
@@ -615,6 +648,73 @@
   font: inherit;
   font-size: 0.76rem;
   cursor: pointer;
+}
+
+.hiddenFile {
+  display: none;
+}
+
+.attachButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.attachButton:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.attachButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.attachmentBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.attachmentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+}
+
+.attachmentName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentChip button {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.attachmentChip button:hover {
+  color: var(--color-error);
 }
 
 .composer {
@@ -839,6 +939,10 @@
 }
 
 @media (max-width: 640px) {
+  .modelPicker {
+    width: 120px;
+  }
+
   .suggestions {
     grid-template-columns: 1fr;
   }

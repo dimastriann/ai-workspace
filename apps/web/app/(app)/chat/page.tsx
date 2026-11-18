@@ -13,18 +13,20 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { McpChatPanel } from "@/components/mcp-chat-panel";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 import { useChatStream } from "@/lib/hooks/use-chat-stream";
 import {
   chatSessionKeys,
+  useChatModels,
   useChatSessions,
   useDeleteChatSession,
   useRenameChatSession,
+  useUploadChatAttachment,
 } from "@/lib/queries/chat-sessions";
 import { useMcpStatus } from "@/lib/queries/mcp";
 import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
-import type { ChatSessionSummary, McpStatusServer, Source } from "@/lib/types";
+import type { ChatAttachment, ChatSessionSummary, McpStatusServer, Source } from "@/lib/types";
 
 import styles from "./page.module.css";
 
@@ -74,6 +76,8 @@ export default function ChatPage() {
   const { data: sessions = [] } = useChatSessions(workspaceId, deferredSearch);
   const deleteSession = useDeleteChatSession(workspaceId);
   const renameSession = useRenameChatSession(workspaceId);
+  const uploadAttachment = useUploadChatAttachment();
+  const { data: modelData } = useChatModels();
   const {
     messages,
     streamingContent,
@@ -103,8 +107,12 @@ export default function ChatPage() {
   const [renameValue, setRenameValue] = useState("");
   const [pendingDeleteSession, setPendingDeleteSession] = useState<ChatSessionSummary | null>(null);
   const [sessionActionError, setSessionActionError] = useState<string | null>(null);
+  const [model, setModel] = useState("");
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const messageContainer = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInput = useRef<HTMLInputElement>(null);
 
   const { data: mcpStatus } = useMcpStatus(infoOpen);
 
@@ -119,6 +127,20 @@ export default function ChatPage() {
   const slashOpen = slashQuery !== null && filteredCommands.length > 0 && !isStreaming;
   const currentWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const currentSession = sessions.find((session) => session.id === sessionId);
+  const availableModels = modelData?.models ?? [];
+  const defaultModel = modelData?.default ?? availableModels[0] ?? "";
+
+  useEffect(() => {
+    if (!model && defaultModel) {
+      setModel(defaultModel);
+    }
+  }, [defaultModel, model]);
+
+  useEffect(() => {
+    if (currentSession?.model) {
+      setModel(currentSession.model);
+    }
+  }, [currentSession?.model]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content.
   useEffect(() => {
@@ -149,6 +171,9 @@ export default function ChatPage() {
     setInput("");
     setSessionSearch("");
     setEditingMessageId(null);
+    setModel(defaultModel);
+    setAttachments([]);
+    setAttachmentError(null);
   }
 
   async function openSession(id: string) {
@@ -156,6 +181,8 @@ export default function ChatPage() {
     setDisabledMcpTools([]);
     setEditingMessageId(null);
     setInput("");
+    setAttachments([]);
+    setAttachmentError(null);
     await loadSession(id);
   }
 
@@ -257,6 +284,26 @@ export default function ChatPage() {
     }
   }
 
+  async function attachFile(file: File) {
+    if (attachments.length >= 5) {
+      setAttachmentError("You can attach up to 5 files.");
+      return;
+    }
+    setAttachmentError(null);
+    try {
+      const uploaded = await uploadAttachment.mutateAsync(file);
+      setAttachments((current) => [...current, uploaded]);
+    } catch (caught) {
+      setAttachmentError(
+        caught instanceof Error ? caught.message : "Could not upload the attachment.",
+      );
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((attachment) => attachment.id !== id));
+  }
+
   async function submitMessage() {
     const content = input.trim();
     if (!content || isStreaming) {
@@ -284,7 +331,15 @@ export default function ChatPage() {
 
     setInput("");
     setSlashError(null);
-    await send(content, workspaceId, disabledMcpTools);
+    await send(
+      content,
+      workspaceId,
+      disabledMcpTools,
+      model || null,
+      attachments.map((attachment) => attachment.id),
+    );
+    setAttachments([]);
+    setAttachmentError(null);
     if (workspaceId) {
       await queryClient.invalidateQueries({
         queryKey: chatSessionKeys.byWorkspace(workspaceId),
@@ -295,6 +350,13 @@ export default function ChatPage() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void submitMessage();
+  }
+
+  function handleModelChange(next: string) {
+    setModel(next);
+    if (sessionId) {
+      void renameSession.mutate({ sessionId, model: next });
+    }
   }
 
   function startEditing(id: string, content: string) {
@@ -311,6 +373,23 @@ export default function ChatPage() {
 
   async function regenerateLast() {
     await regenerate(disabledMcpTools);
+    if (sessionId) {
+      await loadSession(sessionId);
+    }
+  }
+
+  async function chooseAlternative(messageId: string, index: number) {
+    const response = await fetch(
+      `/api/chat/messages/${encodeURIComponent(messageId)}/alternative`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ index }),
+      },
+    );
+    if (response.ok && sessionId) {
+      await loadSession(sessionId);
+    }
   }
 
   async function copyMessage(id: string, content: string) {
@@ -476,6 +555,17 @@ export default function ChatPage() {
             <span>{currentWorkspace?.name ?? "No workspace selected"}</span>
           </div>
 
+          {availableModels.length > 0 ? (
+            <div className={styles.modelPicker}>
+              <Select
+                label="Chat model"
+                value={model || defaultModel}
+                onChange={handleModelChange}
+                options={availableModels.map((name) => ({ value: name, label: name }))}
+              />
+            </div>
+          ) : null}
+
           <Button size="sm" variant="ghost" onClick={() => setMcpOpen(true)}>
             MCP
           </Button>
@@ -564,6 +654,37 @@ export default function ChatPage() {
                         Edit
                       </button>
                     ) : null}
+                    {(message.alternativeCount ?? 1) > 1 ? (
+                      <span className={styles.branchControls}>
+                        <button
+                          type="button"
+                          className={styles.branchButton}
+                          aria-label="Previous response"
+                          disabled={(message.alternativeIndex ?? 0) === 0}
+                          onClick={() =>
+                            void chooseAlternative(message.id, (message.alternativeIndex ?? 0) - 1)
+                          }
+                        >
+                          &lt;
+                        </button>
+                        <span>
+                          {(message.alternativeIndex ?? 0) + 1}/{message.alternativeCount}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.branchButton}
+                          aria-label="Next response"
+                          disabled={
+                            (message.alternativeIndex ?? 0) + 1 >= (message.alternativeCount ?? 1)
+                          }
+                          onClick={() =>
+                            void chooseAlternative(message.id, (message.alternativeIndex ?? 0) + 1)
+                          }
+                        >
+                          &gt;
+                        </button>
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -632,7 +753,64 @@ export default function ChatPage() {
               </div>
             ) : null}
 
+            {attachments.length > 0 ? (
+              <div className={styles.attachmentBar}>
+                {attachments.map((attachment) => (
+                  <span key={attachment.id} className={styles.attachmentChip}>
+                    <span className={styles.attachmentName}>{attachment.filename}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${attachment.filename}`}
+                      onClick={() => removeAttachment(attachment.id)}
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {attachmentError ? <p className={styles.slashError}>{attachmentError}</p> : null}
+
             <form className={styles.composer} onSubmit={handleSubmit}>
+              <input
+                ref={attachmentInput}
+                type="file"
+                className={styles.hiddenFile}
+                multiple
+                accept=".pdf,.md,.markdown,.csv,.txt,.json,.yaml,.yml,.py,.js,.jsx,.ts,.tsx,.rs,.go,.java"
+                aria-label="Attach files"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  for (const file of files.slice(0, 5 - attachments.length)) {
+                    void attachFile(file);
+                  }
+                  event.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                className={styles.attachButton}
+                aria-label="Attach files"
+                onClick={() => attachmentInput.current?.click()}
+                disabled={
+                  isStreaming ||
+                  Boolean(editingMessageId) ||
+                  attachments.length >= 5 ||
+                  uploadAttachment.isPending
+                }
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
+                </svg>
+              </button>
               <textarea
                 ref={composerRef}
                 className={styles.composerInput}

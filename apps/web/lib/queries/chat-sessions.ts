@@ -2,12 +2,26 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { ChatSessionSummary } from "@/lib/types";
+import type { ChatModels, ChatSessionSummary } from "@/lib/types";
+
+export const chatModelKeys = { all: ["chat-models"] as const };
 
 export const chatSessionKeys = {
   byWorkspace: (workspaceId: string | null, query = "") =>
     ["chat-sessions", workspaceId ?? "", query] as const,
 };
+
+async function fetchModels(): Promise<ChatModels> {
+  const response = await fetch("/api/chat/models");
+  if (!response.ok) {
+    throw new Error("Failed to load chat models");
+  }
+  return (await response.json()) as ChatModels;
+}
+
+export function useChatModels() {
+  return useQuery({ queryKey: chatModelKeys.all, queryFn: fetchModels });
+}
 
 async function fetchSessions(
   workspaceId: string | null,
@@ -38,11 +52,14 @@ export function useChatSessions(workspaceId: string | null, query = "") {
 export function useRenameChatSession(workspaceId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { sessionId: string; title: string }) => {
+    mutationFn: async (input: { sessionId: string; title?: string; model?: string }) => {
       const response = await fetch(`/api/chat/sessions/${encodeURIComponent(input.sessionId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: input.title }),
+        body: JSON.stringify({
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.model !== undefined ? { model: input.model } : {}),
+        }),
       });
       if (!response.ok) {
         throw new Error("Failed to rename chat session");
@@ -72,6 +89,34 @@ export function useDeleteChatSession(workspaceId: string | null) {
       void queryClient.invalidateQueries({
         queryKey: ["chat-sessions", workspaceId ?? ""],
       });
+    },
+  });
+}
+
+export function useUploadChatAttachment() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/chat/attachments", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error(
+          response.status === 413
+            ? "That file is too large."
+            : response.status === 415
+              ? "That file type is not supported."
+              : "Could not upload the attachment.",
+        );
+      }
+      return (await response.json()) as {
+        id: string;
+        filename: string;
+        size_bytes: number;
+        characters: number;
+      };
     },
   });
 }

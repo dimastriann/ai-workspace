@@ -47,6 +47,8 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   sources?: Source[];
+  alternativeCount?: number;
+  alternativeIndex?: number;
 }
 
 export type Role = "admin" | "member" | "viewer";
@@ -203,6 +205,8 @@ export interface ChatMessageRecord {
   id: string;
   role: ChatRole;
   content: string;
+  alternative_count: number;
+  alternative_index: number;
   created_at: string;
 }
 
@@ -211,10 +215,23 @@ export interface ChatSessionSummary {
   title: string;
   workspace_id: string | null;
   message_count: number;
+  model: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface ChatSessionDetail extends ChatSessionSummary {
   messages: ChatMessageRecord[];
+}
+
+export interface ChatModels {
+  models: string[];
+  default: string | null;
+}
+
+export interface ChatAttachment {
+  id: string;
+  filename: string;
+  size_bytes: number;
+  characters: number;
 }

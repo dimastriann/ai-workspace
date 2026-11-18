@@ -101,7 +101,13 @@ export function useChatStream() {
   }, []);
 
   const send = useCallback(
-    async (content: string, workspaceId: string | null, disabledMcpTools: string[] = []) => {
+    async (
+      content: string,
+      workspaceId: string | null,
+      disabledMcpTools: string[] = [],
+      model: string | null = null,
+      attachmentIds: string[] = [],
+    ) => {
       if (!content.trim() || isStreaming) {
         return;
       }
@@ -124,6 +130,8 @@ export function useChatStream() {
             session_id: sessionId,
             workspace_id: workspaceId,
             disabled_mcp_tools: disabledMcpTools,
+            model,
+            attachment_ids: attachmentIds,
           }),
           signal: controller.signal,
         });
@@ -256,6 +264,8 @@ export function useChatStream() {
         role: message.role,
         content: message.content,
         sources: [],
+        alternativeCount: message.alternative_count,
+        alternativeIndex: message.alternative_index,
       })),
     );
   }, []);
