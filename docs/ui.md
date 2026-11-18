@@ -63,6 +63,11 @@ responsive as the app grows.
 - The latest assistant response supports Regenerate; user messages support Edit, which
   truncates later turns and resubmits the edited message.
 - Chat history search matches session titles and message content.
+- The composer supports up to five text-extractable attachments; files are extracted
+  server-side and used as context for that message.
+- The header model picker persists the selected model on the chat session.
+- Regenerated assistant responses keep previous versions and expose previous/next branch
+  controls.
 - Sessions are user-owned; never render another user's history.
 - On mobile, the history becomes a drawer with a backdrop and Escape/close support.
 - Rename conversations via a modal; deleting a conversation always requires a
