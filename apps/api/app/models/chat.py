@@ -24,6 +24,8 @@ class ChatMessageRequest(BaseModel):
         max_length=200,
         description="Namespaced MCP tools disabled for this chat message",
     )
+    model: str | None = Field(default=None, max_length=120)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
 
 
 class ChatMessageResponse(BaseModel):
@@ -52,6 +54,8 @@ class ChatMessageItem(BaseModel):
     id: str
     role: str
     content: str
+    alternative_count: int = 1
+    alternative_index: int = 0
     created_at: datetime
 
 
@@ -62,6 +66,7 @@ class ChatSessionSummary(BaseModel):
     title: str
     workspace_id: str | None = None
     message_count: int = 0
+    model: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -73,9 +78,10 @@ class ChatSessionDetail(ChatSessionSummary):
 
 
 class ChatSessionRename(BaseModel):
-    """Rename a chat session."""
+    """Rename a chat session or change its model."""
 
-    title: str = Field(..., min_length=1, max_length=255)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    model: str | None = Field(default=None, max_length=120)
 
 
 class ChatRegenerateRequest(BaseModel):
@@ -91,3 +97,25 @@ class ChatEditRequest(BaseModel):
     session_id: str
     message: str = Field(..., min_length=1, max_length=4000)
     disabled_mcp_tools: list[str] = Field(default_factory=list, max_length=200)
+
+
+class ChatModelsResponse(BaseModel):
+    """Models available for chat."""
+
+    models: list[str] = Field(default_factory=list)
+    default: str | None = None
+
+
+class ChatAttachmentResponse(BaseModel):
+    """An uploaded chat attachment."""
+
+    id: str
+    filename: str
+    size_bytes: int
+    characters: int
+
+
+class ChatAlternativeRequest(BaseModel):
+    """Select an alternative response for a message."""
+
+    index: int = Field(..., ge=0)

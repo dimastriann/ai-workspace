@@ -133,6 +133,7 @@ class ChatSession(Base):
     )
 
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
+    model: Mapped[str | None] = mapped_column(String(120))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -167,6 +168,9 @@ class ChatMessage(Base):
         String(20), nullable=False
     )  # user, assistant, system
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    attachment_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    alternatives: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    active_alternative: Mapped[int] = mapped_column(default=0, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -424,6 +428,22 @@ class McpServer(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now()
     )
+
+
+class ChatAttachment(Base):
+    """A user-owned file attached to a chat message."""
+
+    __tablename__ = "chat_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    content_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
 class AgentRun(Base):

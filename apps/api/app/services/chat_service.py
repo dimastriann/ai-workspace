@@ -7,9 +7,12 @@ Orchestrates the conversational AI logic:
 3. Streaming response generation through the shared provider.
 """
 
+import asyncio
 import json
+import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -17,20 +20,29 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.errors import ChatSessionNotFoundError, ChatValidationError
-from app.models.database import ChatMessage, ChatSession
+from app.config import settings
+from app.core.errors import (
+    ChatSessionNotFoundError,
+    ChatValidationError,
+    FileTooLargeError,
+    UnsupportedFileTypeError,
+)
+from app.models.database import ChatAttachment, ChatMessage, ChatSession
 from app.services.agent_provider import AgentProvider, ToolCall, get_provider
 from app.services.agent_service import DEFAULT_PERMISSIONS
 from app.services.audit_service import audit_service
 from app.services.mcp_service import mcp_service
+from app.services.parsing import extract_text
 from app.services.retrieval import retrieval_service
 from app.services.tools import ToolSpec, tool_registry
 
 MAX_CHAT_TOOL_ROUNDS = 4
+MAX_ATTACHMENT_CHARS = 100_000
 
 
 class ChatService:
     def __init__(self, provider: AgentProvider | None = None):
+        self._custom_provider = provider is not None
         self._provider = provider or get_provider()
 
     async def get_or_create_session(
@@ -39,6 +51,7 @@ class ChatService:
         workspace_id: UUID | None,
         db: AsyncSession,
         user_id: UUID | None = None,
+        model: str | None = None,
     ) -> ChatSession:
         """Fetch an existing owned session or create a new one."""
         if session_id:
@@ -49,6 +62,9 @@ class ChatService:
             if session and (user_id is None or session.user_id in (None, user_id)):
                 if user_id is not None and session.user_id is None:
                     session.user_id = user_id
+                if model is not None:
+                    session.model = model
+                if user_id is not None or model is not None:
                     await db.commit()
                 return session
             if session is not None:
@@ -59,6 +75,7 @@ class ChatService:
             id=session_id or uuid4(),
             workspace_id=workspace_id,
             user_id=user_id,
+            model=model,
             title="New Conversation",
         )
         db.add(new_session)
@@ -87,6 +104,100 @@ class ChatService:
         ]
         return context, sources
 
+    async def create_attachment(
+        self, filename: str, data: bytes, user_id: UUID, db: AsyncSession
+    ) -> ChatAttachment:
+        """Extract text from a chat attachment and persist it."""
+        safe_name = Path(filename or "attachment").name
+        suffix = Path(safe_name).suffix.lower().lstrip(".")
+        if suffix not in settings.allowed_upload_extension_set:
+            raise UnsupportedFileTypeError(
+                f"Unsupported file type: {suffix or 'unknown'}"
+            )
+        if len(data) > settings.max_upload_mb * 1024 * 1024:
+            raise FileTooLargeError(
+                f"File exceeds the {settings.max_upload_mb} MB limit"
+            )
+
+        text = await asyncio.to_thread(extract_text, safe_name, data)
+        text = text.strip()[:MAX_ATTACHMENT_CHARS]
+        attachment = ChatAttachment(
+            user_id=user_id,
+            filename=safe_name,
+            size_bytes=len(data),
+            content_text=text,
+        )
+        db.add(attachment)
+        await db.commit()
+        await db.refresh(attachment)
+        return attachment
+
+    async def attachment_context(
+        self, attachment_ids: list[str], user_id: UUID | None, db: AsyncSession
+    ) -> str:
+        """Build labeled context from owned attachments."""
+        if not attachment_ids or user_id is None:
+            return ""
+        ids: list[uuid.UUID] = []
+        for value in attachment_ids:
+            try:
+                ids.append(UUID(str(value)))
+            except ValueError:
+                continue
+        if not ids:
+            return ""
+        result = await db.execute(
+            select(ChatAttachment).where(
+                ChatAttachment.id.in_(ids),
+                ChatAttachment.user_id == user_id,
+            )
+        )
+        attachments = list(result.scalars().all())
+        if not attachments:
+            return ""
+        return "\n\n".join(
+            f"Attached file: {attachment.filename}\n{attachment.content_text}"
+            for attachment in attachments
+        )
+
+    @staticmethod
+    def _attachment_ids(message: ChatMessage) -> list[str]:
+        try:
+            parsed = json.loads(message.attachment_ids or "[]")
+            return [str(item) for item in parsed] if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+
+    @staticmethod
+    def _alternatives(message: ChatMessage) -> list[str]:
+        try:
+            parsed = json.loads(message.alternatives or "[]")
+            return [str(item) for item in parsed] if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+
+    async def choose_alternative(
+        self, message_id: UUID, index: int, user_id: UUID, db: AsyncSession
+    ) -> ChatMessage:
+        """Select a stored alternative response."""
+        message = await db.get(ChatMessage, message_id)
+        if message is None:
+            raise ChatValidationError("Message not found")
+        session = await self.get_session(message.session_id, user_id, db)
+        target = next(
+            (item for item in session.messages if item.id == message_id), None
+        )
+        if target is None or target.role != "assistant":
+            raise ChatValidationError("Assistant message not found")
+        versions = self._alternatives(target) or [target.content]
+        if index < 0 or index >= len(versions):
+            raise ChatValidationError("Alternative out of range")
+        target.content = versions[index]
+        target.active_alternative = index
+        await db.commit()
+        await db.refresh(target)
+        return target
+
     async def chat_stream(
         self,
         message: str,
@@ -96,12 +207,22 @@ class ChatService:
         context: str | None = None,
         user_id: UUID | None = None,
         disabled_mcp_tools: list[str] | None = None,
+        model: str | None = None,
+        attachment_ids: list[str] | None = None,
     ) -> AsyncGenerator[str]:
         """Stream a response, persisting the user and assistant messages."""
         if context is None:
             context = ""
             if workspace_id:
                 context, _ = await self.build_context(message, workspace_id, db)
+
+        attachment_context = await self.attachment_context(
+            attachment_ids or [], user_id, db
+        )
+        if attachment_context:
+            context = (
+                f"{context}\n\n{attachment_context}" if context else attachment_context
+            )
 
         history = await self._get_history(session_id, db)
 
@@ -118,7 +239,12 @@ class ChatService:
             {"role": "user", "content": message},
         ]
 
-        user_msg = ChatMessage(session_id=session_id, role="user", content=message)
+        user_msg = ChatMessage(
+            session_id=session_id,
+            role="user",
+            content=message,
+            attachment_ids=json.dumps(attachment_ids or []),
+        )
         db.add(user_msg)
         session = await db.get(ChatSession, session_id)
         if session is not None:
@@ -134,6 +260,7 @@ class ChatService:
             db,
             user_id,
             disabled_mcp_tools,
+            model,
         ):
             yield token
 
@@ -150,8 +277,7 @@ class ChatService:
         if not messages or messages[-1].role != "assistant":
             raise ChatValidationError("Nothing to regenerate")
 
-        await db.delete(messages[-1])
-        await db.commit()
+        last_assistant = messages[-1]
         messages = messages[:-1]
 
         last_user = next(
@@ -166,6 +292,13 @@ class ChatService:
             if session.workspace_id
             else ("", [])
         )
+        attachment_context = await self.attachment_context(
+            self._attachment_ids(last_user), user_id, db
+        )
+        if attachment_context:
+            context = (
+                f"{context}\n\n{attachment_context}" if context else attachment_context
+            )
         system_msg = self._system_prompt(context)
         history = self._history_from_messages(messages)
         prompt = [
@@ -180,6 +313,8 @@ class ChatService:
             db,
             user_id,
             disabled_mcp_tools,
+            session.model,
+            replace_message=last_assistant,
         ):
             yield token
 
@@ -218,6 +353,13 @@ class ChatService:
             if session.workspace_id
             else ("", [])
         )
+        attachment_context = await self.attachment_context(
+            self._attachment_ids(messages[target_index]), user_id, db
+        )
+        if attachment_context:
+            context = (
+                f"{context}\n\n{attachment_context}" if context else attachment_context
+            )
         prompt = [
             {"role": "system", "content": self._system_prompt(context)},
             *self._history_from_messages(kept),
@@ -230,6 +372,7 @@ class ChatService:
             db,
             user_id,
             disabled_mcp_tools,
+            session.model,
         ):
             yield token
 
@@ -241,7 +384,11 @@ class ChatService:
         db: AsyncSession,
         user_id: UUID | None,
         disabled_mcp_tools: list[str] | None,
+        model: str | None,
+        *,
+        replace_message: ChatMessage | None = None,
     ) -> AsyncGenerator[str]:
+        provider = self._provider if self._custom_provider else get_provider(model)
         permissions = set(DEFAULT_PERMISSIONS)
         disabled = set(disabled_mcp_tools or [])
         mcp_tools = [
@@ -260,7 +407,7 @@ class ChatService:
             assistant_text = ""
             calls: list[ToolCall] = []
 
-            async for event in self._provider.stream(messages, schemas):
+            async for event in provider.stream(messages, schemas):
                 if event.type == "token":
                     assistant_text += event.content
                     full_response += event.content
@@ -301,10 +448,20 @@ class ChatService:
                     }
                 )
 
-        assistant_msg = ChatMessage(
-            session_id=session_id, role="assistant", content=full_response
-        )
-        db.add(assistant_msg)
+        if replace_message is None:
+            assistant_msg = ChatMessage(
+                session_id=session_id, role="assistant", content=full_response
+            )
+            db.add(assistant_msg)
+        else:
+            versions = self._alternatives(replace_message)
+            if replace_message.content and replace_message.content not in versions:
+                versions.append(replace_message.content)
+            versions.append(full_response)
+            replace_message.alternatives = json.dumps(versions)
+            replace_message.content = full_response
+            replace_message.active_alternative = len(versions) - 1
+
         session = await db.get(ChatSession, session_id)
         if session is not None:
             session.updated_at = datetime.now(UTC).replace(tzinfo=None)
@@ -416,11 +573,20 @@ class ChatService:
         return session
 
     async def rename_session(
-        self, session_id: UUID, title: str, user_id: UUID, db: AsyncSession
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        db: AsyncSession,
+        *,
+        title: str | None = None,
+        model: str | None = None,
     ) -> ChatSession:
-        """Rename an owned session."""
+        """Rename an owned session and/or change its model."""
         session = await self.get_session(session_id, user_id, db)
-        session.title = title.strip()
+        if title is not None:
+            session.title = title.strip()
+        if model is not None:
+            session.model = model
         await db.commit()
         await db.refresh(session)
         return session

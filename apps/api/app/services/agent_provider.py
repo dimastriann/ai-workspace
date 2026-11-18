@@ -41,7 +41,7 @@ class AgentProvider(Protocol):
 class OpenAIProvider:
     """Stream chat completions and tool calls from an OpenAI-compatible API."""
 
-    def __init__(self) -> None:
+    def __init__(self, model: str | None = None) -> None:
         kwargs: dict[str, Any] = {
             "api_key": settings.openai_api_key or "missing",
         }
@@ -50,7 +50,7 @@ class OpenAIProvider:
             kwargs["api_key"] = settings.openai_api_key or "ollama"
 
         self._client = AsyncOpenAI(**kwargs)
-        self._model = settings.openai_model
+        self._model = model or settings.openai_model
 
     async def stream(
         self,
@@ -105,6 +105,6 @@ class OpenAIProvider:
         yield ProviderEvent(type="done")
 
 
-def get_provider() -> OpenAIProvider:
-    """Build the configured provider."""
-    return OpenAIProvider()
+def get_provider(model: str | None = None) -> OpenAIProvider:
+    """Build the configured provider, optionally overriding the model."""
+    return OpenAIProvider(model)

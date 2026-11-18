@@ -1,5 +1,6 @@
 """Tests for the provider-backed chat stream."""
 
+import json
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -265,6 +266,12 @@ async def test_regenerate_replaces_last_assistant(db_session: AsyncSession) -> N
         "Question",
         "New answer",
     ]
+    assistant = refreshed.messages[-1]
+    assert json.loads(assistant.alternatives) == ["Old answer", "New answer"]
+    assert assistant.active_alternative == 1
+
+    switched = await service.choose_alternative(assistant.id, 0, user.id, db_session)
+    assert switched.content == "Old answer"
 
 
 async def test_edit_message_truncates_later_turns(db_session: AsyncSession) -> None:

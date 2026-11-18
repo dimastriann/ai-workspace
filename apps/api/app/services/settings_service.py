@@ -51,6 +51,9 @@ SETTINGS: dict[str, SettingSpec] = {
     "rag.retriever": SettingSpec("rag.retriever", SettingType.STRING, "postgres"),
     "llm.provider": SettingSpec("llm.provider", SettingType.STRING, "openai"),
     "llm.openai_model": SettingSpec("llm.openai_model", SettingType.STRING, "gpt-4o"),
+    "llm.available_models": SettingSpec(
+        "llm.available_models", SettingType.STRING, "gpt-4o,gpt-4o-mini"
+    ),
     "llm.openai_api_key": SettingSpec(
         "llm.openai_api_key", SettingType.STRING, "", is_secret=True
     ),

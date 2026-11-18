@@ -119,3 +119,62 @@ async def test_chat_stream_does_not_reuse_foreign_session_id(
     )
     assert created.id != foreign.id
     assert created.user_id == member.id
+
+
+@pytest.mark.asyncio
+async def test_chat_models_and_session_model(
+    member_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    models = await member_client.get("/api/chat/models")
+    assert models.status_code == 200
+    body = models.json()
+    assert body["models"]
+    assert body["default"] in body["models"]
+
+    member = await auth_service.get_user_by_email("member@example.com", db_session)
+    assert member is not None
+    session = ChatSession(
+        id=uuid.uuid4(),
+        workspace_id=None,
+        user_id=member.id,
+        title="Model test",
+        model=body["default"],
+    )
+    db_session.add(session)
+    await db_session.commit()
+
+    listed = await member_client.get("/api/chat/sessions")
+    assert listed.status_code == 200
+    assert listed.json()[0]["model"] == body["default"]
+
+    updated = await member_client.patch(
+        f"/api/chat/sessions/{session.id}",
+        json={"model": body["models"][-1]},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["model"] == body["models"][-1]
+
+
+@pytest.mark.asyncio
+async def test_chat_attachment_upload_and_context(
+    member_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    uploaded = await member_client.post(
+        "/api/chat/attachments",
+        files={"file": ("notes.txt", b"unique attachment context", "text/plain")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    body = uploaded.json()
+    assert body["filename"] == "notes.txt"
+    assert body["characters"] > 0
+
+    member = await auth_service.get_user_by_email("member@example.com", db_session)
+    assert member is not None
+    context = await chat_service.attachment_context([body["id"]], member.id, db_session)
+    assert "unique attachment context" in context
+
+    unsupported = await member_client.post(
+        "/api/chat/attachments",
+        files={"file": ("image.exe", b"binary", "application/octet-stream")},
+    )
+    assert unsupported.status_code == 415
