@@ -4,13 +4,14 @@ AI Workspace API — Auth Router
 Login, logout, and current-user endpoints backed by opaque sessions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.database import get_db_session
 from app.dependencies import get_current_user
 from app.models.database import User
+from app.models.enums import Role, role_at_least
 from app.models.user import LoginRequest, UserResponse
 from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service
@@ -48,6 +49,7 @@ async def login(
         secure=settings.secure_cookies,
         samesite="lax",
         max_age=settings.session_ttl_hours * 3600,
+        domain=settings.session_cookie_domain,
         path="/",
     )
     await audit_service.record(
@@ -77,3 +79,17 @@ async def logout(
 async def me(user: User = Depends(get_current_user)) -> UserResponse:
     """Return the authenticated user."""
     return to_user_response(user)
+
+
+@router.get("/verify", status_code=status.HTTP_204_NO_CONTENT)
+async def verify_session(
+    role: Role | None = Query(None),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Validate a session for reverse-proxy forward authentication."""
+    required = role or Role.VIEWER
+    if not role_at_least(user.role, required):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

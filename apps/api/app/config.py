@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "ai_workspace_session"
     session_ttl_hours: int = 24 * 7
     session_cookie_secure: bool = False
+    session_cookie_domain: str | None = None
     admin_email: str = ""
     admin_password: str = ""
 

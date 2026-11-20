@@ -152,6 +152,34 @@ async def test_login_me_logout_flow(
     assert after.status_code == 401
 
 
+async def test_reverse_proxy_verification(
+    auth_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await auth_service.create_user(
+        email="admin@example.com",
+        password=PASSWORD,
+        role=Role.ADMIN,
+        db=db_session,
+    )
+
+    unauthenticated = await auth_client.get("/api/auth/verify")
+    assert unauthenticated.status_code == 401
+
+    login = await auth_client.post(
+        "/api/auth/login", json={"email": "admin@example.com", "password": PASSWORD}
+    )
+    assert login.status_code == 200
+
+    viewer_ok = await auth_client.get("/api/auth/verify")
+    assert viewer_ok.status_code == 204
+
+    member_ok = await auth_client.get("/api/auth/verify", params={"role": "member"})
+    assert member_ok.status_code == 204
+
+    admin_ok = await auth_client.get("/api/auth/verify", params={"role": "admin"})
+    assert admin_ok.status_code == 204
+
+
 async def test_login_rejects_invalid_credentials(auth_client: AsyncClient) -> None:
     response = await auth_client.post(
         "/api/auth/login",
