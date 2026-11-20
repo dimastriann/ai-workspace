@@ -66,8 +66,8 @@ responsive as the app grows.
 - The composer supports up to five text-extractable attachments; files are extracted
   server-side and used as context for that message.
 - The header model picker persists the selected model on the chat session.
-- Regenerated assistant responses keep previous versions and expose previous/next branch
-  controls.
+- Regenerating or editing a message creates a conversation branch; the previous path is
+  preserved and previous/next controls switch between sibling branches.
 - Sessions are user-owned; never render another user's history.
 - On mobile, the history becomes a drawer with a backdrop and Escape/close support.
 - Rename conversations via a modal; deleting a conversation always requires a
