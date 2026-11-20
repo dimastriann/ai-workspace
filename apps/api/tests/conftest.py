@@ -5,7 +5,9 @@ Shared pytest fixtures for the test suite.
 """
 
 from collections.abc import AsyncGenerator
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -20,6 +22,27 @@ from app.models.database import Base
 from app.models.enums import Role
 from app.services.auth_service import auth_service
 
+app_settings.session_cookie_domain = None
+
+
+class AllowLocalhostSubdomainPolicy(DefaultCookiePolicy):
+    """Accept domain cookies emitted for shared test origins."""
+
+    def set_ok_domain(self, cookie, request):
+        return True
+
+    def domain_return_ok(self, domain, request):
+        return True
+
+    def return_ok_domain(self, cookie, request):
+        return True
+
+
+class AllowLocalhostSubdomainJar(CookieJar):
+    def __init__(self) -> None:
+        super().__init__(policy=AllowLocalhostSubdomainPolicy())
+
+
 MEMBER_EMAIL = "member@example.com"
 VIEWER_EMAIL = "viewer@example.com"
 TEST_PASSWORD = "password123"
@@ -29,8 +52,12 @@ TEST_PASSWORD = "password123"
 async def client():
     """Async HTTP client for testing FastAPI endpoints."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies=httpx.Cookies(AllowLocalhostSubdomainJar()),
+    )
+    yield client
 
 
 @pytest_asyncio.fixture
@@ -62,8 +89,13 @@ async def auth_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_db_session] = override_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    jar = AllowLocalhostSubdomainJar()
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies=httpx.Cookies(jar),
+    )
+    yield client
     app.dependency_overrides.clear()
 
 
