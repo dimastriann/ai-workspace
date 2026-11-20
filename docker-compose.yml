@@ -12,6 +12,8 @@ services:
       - "3000:3000"
     environment:
       - API_BASE_URL=http://api:8000
+      - NEXT_PUBLIC_IDE_URL=${NEXT_PUBLIC_IDE_URL:-http://ide.localhost:8090}
+      - NEXT_PUBLIC_TERMINAL_URL=${NEXT_PUBLIC_TERMINAL_URL:-http://terminal.localhost:8090}
     depends_on:
       - api
 
@@ -63,6 +65,109 @@ services:
     environment:
       - RUST_LOG=info
 
+  # ── Runtime volume ownership bootstrap (optional, runs once) ─────────────
+  # The API runs as root and keeps writing files; the runtime services run as
+  # a non-root coder user. This job gives the shared workspace volume coder
+  # ownership whenever the runtime profile starts.
+  runtime-init:
+    image: alpine:3.21
+    profiles: ["runtime"]
+    user: "0:0"
+    volumes:
+      - api_uploads:/workspace
+    command: ["chown", "-R", "1000:1000", "/workspace"]
+
+  # ── Browser IDE (optional runtime profile) ───────────────────────────────
+  runtime-ide:
+    build:
+      context: ./runtime
+      dockerfile: Dockerfile
+      args:
+        CODE_SERVER_VERSION: "4.145.2"
+        TTYD_VERSION: "1.7.7"
+        INSTALL_NODE: "${RUNTIME_INSTALL_NODE:-false}"
+        INSTALL_PYTHON: "${RUNTIME_INSTALL_PYTHON:-false}"
+    profiles: ["runtime"]
+    command:
+      [
+        "code-server",
+        "--auth",
+        "none",
+        "--bind-addr",
+        "0.0.0.0:8080",
+        "--disable-telemetry",
+        "--disable-workspace-trust",
+        "/home/coder/workspace",
+      ]
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    volumes:
+      - api_uploads:/home/coder/workspace
+    depends_on:
+      runtime-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+  # ── Browser terminal (optional runtime profile, workspace read-only) ─────
+  runtime-terminal:
+    build:
+      context: ./runtime
+      dockerfile: Dockerfile
+      args:
+        CODE_SERVER_VERSION: "4.145.2"
+        TTYD_VERSION: "1.7.7"
+        INSTALL_NODE: "${RUNTIME_INSTALL_NODE:-false}"
+        INSTALL_PYTHON: "${RUNTIME_INSTALL_PYTHON:-false}"
+    profiles: ["runtime"]
+    entrypoint: ["/usr/local/bin/ttyd"]
+    command: ["--port", "7681", "--max-clients", "8", "-W", "bash"]
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    volumes:
+      - api_uploads:/home/coder/workspace:ro
+    depends_on:
+      runtime-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  # ── Edge proxy (optional runtime profile) ────────────────────────────────
+  # Routes app/ide/terminal through one local port and enforces session roles
+  # with FastAPI forward authentication.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["runtime"]
+    ports:
+      - "8090:80"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+      - runtime-ide
+      - runtime-terminal
+    security_opt:
+      - no-new-privileges:true
+
   # ── PostgreSQL ───────────────────────────────────────────────────────────
   # 17 is retained for data-volume compatibility; the 18 upgrade is documented.
   postgres:
@@ -110,3 +215,5 @@ volumes:
   redis_data:
   qdrant_data:
   api_uploads:
+  caddy_data:
+  caddy_config:
