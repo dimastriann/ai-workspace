@@ -54,8 +54,8 @@ class ChatMessageItem(BaseModel):
     id: str
     role: str
     content: str
-    alternative_count: int = 1
-    alternative_index: int = 0
+    branch_count: int = 1
+    branch_index: int = 0
     created_at: datetime
 
 
@@ -115,7 +115,7 @@ class ChatAttachmentResponse(BaseModel):
     characters: int
 
 
-class ChatAlternativeRequest(BaseModel):
-    """Select an alternative response for a message."""
+class ChatBranchRequest(BaseModel):
+    """Select a message branch as the active conversation path."""
 
     index: int = Field(..., ge=0)

@@ -134,6 +134,10 @@ class ChatSession(Base):
 
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
     model: Mapped[str | None] = mapped_column(String(120))
+    active_leaf_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_messages.id", use_alter=True, ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -149,6 +153,7 @@ class ChatSession(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         order_by="ChatMessage.created_at",
+        foreign_keys="[ChatMessage.session_id]",
     )
 
 
@@ -171,12 +176,19 @@ class ChatMessage(Base):
     attachment_ids: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     alternatives: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     active_alternative: Mapped[int] = mapped_column(default=0, nullable=False)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_messages.id", use_alter=True, ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     # Relationships
     session: Mapped["ChatSession"] = relationship(
-        "ChatSession", back_populates="messages"
+        "ChatSession",
+        back_populates="messages",
+        foreign_keys="[ChatMessage.session_id]",
     )
 
 

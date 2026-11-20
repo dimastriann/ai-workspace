@@ -1,6 +1,5 @@
 """Tests for the provider-backed chat stream."""
 
-import json
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -231,7 +230,7 @@ async def test_chat_filters_session_disabled_mcp_tools(
     assert "mcp__GitHub__list_issues" not in tool_names
 
 
-async def test_regenerate_replaces_last_assistant(db_session: AsyncSession) -> None:
+async def test_regenerate_creates_branch(db_session: AsyncSession) -> None:
     workspace = Workspace(id=uuid.uuid4(), name="Test")
     db_session.add(workspace)
     await db_session.commit()
@@ -248,10 +247,22 @@ async def test_regenerate_replaces_last_assistant(db_session: AsyncSession) -> N
         title="Regenerate",
     )
     db_session.add(session)
-    db_session.add(ChatMessage(session_id=session.id, role="user", content="Question"))
-    db_session.add(
-        ChatMessage(session_id=session.id, role="assistant", content="Old answer")
+    question = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        role="user",
+        content="Question",
     )
+    old_answer = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        role="assistant",
+        content="Old answer",
+        parent_id=question.id,
+    )
+    db_session.add(question)
+    db_session.add(old_answer)
+    session.active_leaf_id = old_answer.id
     await db_session.commit()
 
     service = ChatService(provider=FakeProvider(["New answer"]))
@@ -262,19 +273,25 @@ async def test_regenerate_replaces_last_assistant(db_session: AsyncSession) -> N
     assert "".join(tokens) == "New answer"
 
     refreshed = await service.get_session(session.id, user.id, db_session)
-    assert [message.content for message in refreshed.messages] == [
-        "Question",
-        "New answer",
-    ]
-    assistant = refreshed.messages[-1]
-    assert json.loads(assistant.alternatives) == ["Old answer", "New answer"]
-    assert assistant.active_alternative == 1
+    active = service._active_messages(refreshed)
+    assert [message.content for message in active] == ["Question", "New answer"]
+    assert len(refreshed.messages) == 3
+    siblings = service._siblings_for_parent(refreshed, question.id)
+    assert {message.content for message in siblings} == {"Old answer", "New answer"}
+    assert refreshed.active_leaf_id is not None
 
-    switched = await service.choose_alternative(assistant.id, 0, user.id, db_session)
-    assert switched.content == "Old answer"
+    old_sibling = next(
+        message for message in siblings if message.content == "Old answer"
+    )
+    switched = await service.switch_branch(
+        old_sibling.id, siblings.index(old_sibling), user.id, db_session
+    )
+    assert switched.active_leaf_id == old_sibling.id
+    active = service._active_messages(switched)
+    assert [message.content for message in active] == ["Question", "Old answer"]
 
 
-async def test_edit_message_truncates_later_turns(db_session: AsyncSession) -> None:
+async def test_edit_message_creates_branch(db_session: AsyncSession) -> None:
     workspace = Workspace(id=uuid.uuid4(), name="Test")
     db_session.add(workspace)
     await db_session.commit()
@@ -292,12 +309,21 @@ async def test_edit_message_truncates_later_turns(db_session: AsyncSession) -> N
     )
     db_session.add(session)
     original = ChatMessage(
-        session_id=session.id, role="user", content="Original question"
+        id=uuid.uuid4(),
+        session_id=session.id,
+        role="user",
+        content="Original question",
+    )
+    old_answer = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        role="assistant",
+        content="Old answer",
+        parent_id=original.id,
     )
     db_session.add(original)
-    db_session.add(
-        ChatMessage(session_id=session.id, role="assistant", content="Old answer")
-    )
+    db_session.add(old_answer)
+    session.active_leaf_id = old_answer.id
     await db_session.commit()
 
     service = ChatService(provider=FakeProvider(["Edited answer"]))
@@ -310,7 +336,35 @@ async def test_edit_message_truncates_later_turns(db_session: AsyncSession) -> N
     assert "".join(tokens) == "Edited answer"
 
     refreshed = await service.get_session(session.id, user.id, db_session)
-    assert [message.content for message in refreshed.messages] == [
+    active = service._active_messages(refreshed)
+    assert [message.content for message in active] == [
         "Edited question",
         "Edited answer",
+    ]
+    assert len(refreshed.messages) == 4
+    assert refreshed.active_leaf_id is not None
+    original = next(
+        message
+        for message in refreshed.messages
+        if message.content == "Original question"
+    )
+    siblings = service._siblings_for_parent(refreshed, original.parent_id)
+    assert {message.content for message in siblings} == {
+        "Original question",
+        "Edited question",
+    }
+    old_branch = next(
+        message for message in refreshed.messages if message.content == "Old answer"
+    )
+    switched = await service.switch_branch(
+        old_branch.id,
+        service._siblings_for_parent(refreshed, old_branch.parent_id).index(old_branch),
+        user.id,
+        db_session,
+    )
+    assert switched.active_leaf_id == old_branch.id
+    active = service._active_messages(switched)
+    assert [message.content for message in active] == [
+        "Original question",
+        "Old answer",
     ]

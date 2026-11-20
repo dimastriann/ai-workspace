@@ -37,6 +37,12 @@ from app.services.retrieval import retrieval_service
 from app.services.tools import ToolSpec, tool_registry
 
 MAX_CHAT_TOOL_ROUNDS = 4
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 MAX_ATTACHMENT_CHARS = 100_000
 
 
@@ -169,34 +175,64 @@ class ChatService:
             return []
 
     @staticmethod
-    def _alternatives(message: ChatMessage) -> list[str]:
-        try:
-            parsed = json.loads(message.alternatives or "[]")
-            return [str(item) for item in parsed] if isinstance(parsed, list) else []
-        except json.JSONDecodeError:
-            return []
+    def _active_messages(session: ChatSession) -> list[ChatMessage]:
+        """Return the message path for the session's active branch."""
+        if session.active_leaf_id is None:
+            return list(session.messages)
 
-    async def choose_alternative(
+        by_id = {message.id: message for message in session.messages}
+        leaf = by_id.get(session.active_leaf_id)
+        if leaf is None:
+            return list(session.messages)
+
+        path: list[ChatMessage] = []
+        current: ChatMessage | None = leaf
+        while current is not None:
+            path.append(current)
+            current = by_id.get(current.parent_id) if current.parent_id else None
+        path.reverse()
+        return path
+
+    async def switch_branch(
         self, message_id: UUID, index: int, user_id: UUID, db: AsyncSession
-    ) -> ChatMessage:
-        """Select a stored alternative response."""
+    ) -> ChatSession:
+        """Select a sibling branch and make its latest leaf active."""
         message = await db.get(ChatMessage, message_id)
         if message is None:
             raise ChatValidationError("Message not found")
-        session = await self.get_session(message.session_id, user_id, db)
-        target = next(
-            (item for item in session.messages if item.id == message_id), None
+        session = await self.get_session(
+            message.session_id, user_id or uuid.uuid4(), db
         )
-        if target is None or target.role != "assistant":
-            raise ChatValidationError("Assistant message not found")
-        versions = self._alternatives(target) or [target.content]
-        if index < 0 or index >= len(versions):
-            raise ChatValidationError("Alternative out of range")
-        target.content = versions[index]
-        target.active_alternative = index
+        siblings = self._siblings_for_parent(session, message.parent_id)
+        if index < 0 or index >= len(siblings):
+            raise ChatValidationError("Branch out of range")
+        target = siblings[index]
+        session.active_leaf_id = self._branch_leaf(session, target).id
         await db.commit()
-        await db.refresh(target)
-        return target
+        await db.refresh(session)
+        return session
+
+    @staticmethod
+    def _siblings_for_parent(
+        session: ChatSession, parent_id: uuid.UUID | None
+    ) -> list[ChatMessage]:
+        siblings = [
+            message for message in session.messages if message.parent_id == parent_id
+        ]
+        siblings.sort(key=lambda message: (message.created_at, message.id))
+        return siblings
+
+    @staticmethod
+    def _branch_leaf(session: ChatSession, message: ChatMessage) -> ChatMessage:
+        """Return the newest descendant of a message, or the message itself."""
+        current = message
+        while True:
+            children = [
+                item for item in session.messages if item.parent_id == current.id
+            ]
+            if not children:
+                return current
+            current = max(children, key=lambda item: (item.created_at, item.id))
 
     async def chat_stream(
         self,
@@ -211,6 +247,10 @@ class ChatService:
         attachment_ids: list[str] | None = None,
     ) -> AsyncGenerator[str]:
         """Stream a response, persisting the user and assistant messages."""
+        session = await self.get_session(session_id, user_id, db)
+        active = self._active_messages(session)
+        parent = active[-1].id if active else None
+
         if context is None:
             context = ""
             if workspace_id:
@@ -224,18 +264,11 @@ class ChatService:
                 f"{context}\n\n{attachment_context}" if context else attachment_context
             )
 
-        history = await self._get_history(session_id, db)
-
-        system_msg = "You are a helpful AI assistant in the AI Workspace platform."
-        if context:
-            system_msg += (
-                "\n\nUse the following context from the documents to answer "
-                f"the user if relevant:\n{context}"
-            )
+        system_msg = self._system_prompt(context)
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_msg},
-            *history,
+            *self._history_from_messages(active),
             {"role": "user", "content": message},
         ]
 
@@ -244,13 +277,13 @@ class ChatService:
             role="user",
             content=message,
             attachment_ids=json.dumps(attachment_ids or []),
+            parent_id=parent,
+            created_at=_utcnow(),
         )
         db.add(user_msg)
-        session = await db.get(ChatSession, session_id)
-        if session is not None:
-            if session.title == "New Conversation":
-                session.title = message.strip()[:80]
-            session.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        if session.title == "New Conversation":
+            session.title = message.strip()[:80]
+        session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
 
         async for token in self._stream_completion(
@@ -261,6 +294,7 @@ class ChatService:
             user_id,
             disabled_mcp_tools,
             model,
+            parent_message_id=user_msg.id,
         ):
             yield token
 
@@ -271,17 +305,17 @@ class ChatService:
         user_id: UUID,
         disabled_mcp_tools: list[str] | None = None,
     ) -> AsyncGenerator[str]:
-        """Replace the latest assistant message with a fresh response."""
+        """Replace the active assistant response with a new branch."""
         session = await self.get_session(session_id, user_id, db)
-        messages = list(session.messages)
-        if not messages or messages[-1].role != "assistant":
+        active = self._active_messages(session)
+        if not active or active[-1].role != "assistant":
             raise ChatValidationError("Nothing to regenerate")
 
-        last_assistant = messages[-1]
-        messages = messages[:-1]
+        last_assistant = active[-1]
+        history = active[:-1]
 
         last_user = next(
-            (message for message in reversed(messages) if message.role == "user"),
+            (message for message in reversed(history) if message.role == "user"),
             None,
         )
         if last_user is None:
@@ -300,10 +334,9 @@ class ChatService:
                 f"{context}\n\n{attachment_context}" if context else attachment_context
             )
         system_msg = self._system_prompt(context)
-        history = self._history_from_messages(messages)
         prompt = [
             {"role": "system", "content": system_msg},
-            *history,
+            *self._history_from_messages(history),
         ]
 
         async for token in self._stream_completion(
@@ -314,7 +347,7 @@ class ChatService:
             user_id,
             disabled_mcp_tools,
             session.model,
-            replace_message=last_assistant,
+            parent_message_id=last_assistant.parent_id,
         ):
             yield token
 
@@ -327,13 +360,13 @@ class ChatService:
         user_id: UUID,
         disabled_mcp_tools: list[str] | None = None,
     ) -> AsyncGenerator[str]:
-        """Edit a user message, truncate later turns, and answer it again."""
+        """Edit a user message as a new conversation branch."""
         session = await self.get_session(session_id, user_id, db)
-        messages = list(session.messages)
+        active = self._active_messages(session)
         target_index = next(
             (
                 index
-                for index, message in enumerate(messages)
+                for index, message in enumerate(active)
                 if message.id == message_id and message.role == "user"
             ),
             None,
@@ -341,20 +374,26 @@ class ChatService:
         if target_index is None:
             raise ChatValidationError("User message not found")
 
-        for message in messages[target_index + 1 :]:
-            await db.delete(message)
-        messages[target_index].content = new_content.strip()
+        target = active[target_index]
+        new_user = ChatMessage(
+            session_id=session_id,
+            role="user",
+            content=new_content.strip(),
+            attachment_ids=target.attachment_ids,
+            parent_id=target.parent_id,
+            created_at=_utcnow(),
+        )
+        db.add(new_user)
         session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
 
-        kept = messages[: target_index + 1]
         context, _sources = (
             await self.build_context(new_content, session.workspace_id, db)
             if session.workspace_id
             else ("", [])
         )
         attachment_context = await self.attachment_context(
-            self._attachment_ids(messages[target_index]), user_id, db
+            self._attachment_ids(new_user), user_id, db
         )
         if attachment_context:
             context = (
@@ -362,7 +401,8 @@ class ChatService:
             )
         prompt = [
             {"role": "system", "content": self._system_prompt(context)},
-            *self._history_from_messages(kept),
+            *self._history_from_messages(active[:target_index]),
+            {"role": "user", "content": new_content.strip()},
         ]
 
         async for token in self._stream_completion(
@@ -373,6 +413,7 @@ class ChatService:
             user_id,
             disabled_mcp_tools,
             session.model,
+            parent_message_id=new_user.id,
         ):
             yield token
 
@@ -386,7 +427,7 @@ class ChatService:
         disabled_mcp_tools: list[str] | None,
         model: str | None,
         *,
-        replace_message: ChatMessage | None = None,
+        parent_message_id: uuid.UUID | None = None,
     ) -> AsyncGenerator[str]:
         provider = self._provider if self._custom_provider else get_provider(model)
         permissions = set(DEFAULT_PERMISSIONS)
@@ -448,23 +489,19 @@ class ChatService:
                     }
                 )
 
-        if replace_message is None:
-            assistant_msg = ChatMessage(
-                session_id=session_id, role="assistant", content=full_response
-            )
-            db.add(assistant_msg)
-        else:
-            versions = self._alternatives(replace_message)
-            if replace_message.content and replace_message.content not in versions:
-                versions.append(replace_message.content)
-            versions.append(full_response)
-            replace_message.alternatives = json.dumps(versions)
-            replace_message.content = full_response
-            replace_message.active_alternative = len(versions) - 1
-
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=full_response,
+            parent_id=parent_message_id,
+            created_at=_utcnow(),
+        )
+        db.add(assistant_msg)
+        await db.flush()
         session = await db.get(ChatSession, session_id)
         if session is not None:
-            session.updated_at = datetime.now(UTC).replace(tzinfo=None)
+            session.active_leaf_id = assistant_msg.id
+            session.updated_at = _utcnow()
         await db.commit()
 
     @staticmethod
@@ -558,7 +595,7 @@ class ChatService:
         return [(session, int(count)) for session, count in result.all()]
 
     async def get_session(
-        self, session_id: UUID, user_id: UUID, db: AsyncSession
+        self, session_id: UUID, user_id: UUID | None, db: AsyncSession
     ) -> ChatSession:
         """Load an owned session with messages."""
         result = await db.execute(
@@ -568,7 +605,20 @@ class ChatService:
             .execution_options(populate_existing=True)
         )
         session = result.scalar_one_or_none()
-        if session is None or session.user_id != user_id:
+        if session is not None:
+            messages = (
+                (
+                    await db.execute(
+                        select(ChatMessage)
+                        .where(ChatMessage.session_id == session_id)
+                        .order_by(ChatMessage.created_at, ChatMessage.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            session.messages = list(messages)
+        if session is None or (user_id is not None and session.user_id != user_id):
             raise ChatSessionNotFoundError("Chat session not found")
         return session
 
@@ -599,27 +649,6 @@ class ChatService:
         await db.delete(session)
         await db.commit()
         return session
-
-    async def _get_history(
-        self, session_id: UUID, db: AsyncSession
-    ) -> list[dict[str, Any]]:
-        """Load recent message history in provider message format."""
-        result = await db.execute(
-            select(ChatMessage)
-            .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created_at.desc())
-            .limit(10)
-        )
-        messages = list(result.scalars().all())
-        messages.reverse()
-
-        return [
-            {
-                "role": "user" if item.role == "user" else "assistant",
-                "content": item.content,
-            }
-            for item in messages
-        ]
 
 
 # Singleton instance

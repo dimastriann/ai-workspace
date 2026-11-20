@@ -29,8 +29,8 @@ from app.core.errors import (
 )
 from app.dependencies import require_member, require_same_origin
 from app.models.chat import (
-    ChatAlternativeRequest,
     ChatAttachmentResponse,
+    ChatBranchRequest,
     ChatEditRequest,
     ChatMessageItem,
     ChatMessageRequest,
@@ -68,21 +68,22 @@ def _alternatives(message: ChatMessage) -> list[str]:
 
 
 def _session_detail(session: ChatSession) -> ChatSessionDetail:
+    active = chat_service._active_messages(session)
     summary = _session_summary(session, len(session.messages))
-    return ChatSessionDetail(
-        **summary.model_dump(),
-        messages=[
+    items: list[ChatMessageItem] = []
+    for message in active:
+        siblings = chat_service._siblings_for_parent(session, message.parent_id)
+        items.append(
             ChatMessageItem(
                 id=str(message.id),
                 role=message.role,
                 content=message.content,
-                alternative_count=max(1, len(_alternatives(message))),
-                alternative_index=message.active_alternative,
+                branch_count=len(siblings),
+                branch_index=siblings.index(message),
                 created_at=message.created_at,
             )
-            for message in session.messages
-        ],
-    )
+        )
+    return ChatSessionDetail(**summary.model_dump(), messages=items)
 
 
 @router.get("/models", response_model=ChatModelsResponse)
@@ -318,27 +319,24 @@ async def upload_attachment(
     )
 
 
-@router.patch("/messages/{message_id}/alternative")
-async def choose_alternative(
+@router.patch("/messages/{message_id}/branch")
+async def choose_branch(
     message_id: UUID,
-    data: ChatAlternativeRequest,
+    data: ChatBranchRequest,
     db: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_member),
     _: None = Depends(require_same_origin),
 ):
-    """Select an alternative response for an assistant message."""
+    """Select a message branch as the active conversation path."""
     try:
-        message = await chat_service.choose_alternative(
-            message_id, data.index, user.id, db
-        )
+        session = await chat_service.switch_branch(message_id, data.index, user.id, db)
     except ChatValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
     return {
-        "id": str(message.id),
-        "content": message.content,
-        "alternative_index": message.active_alternative,
+        "session_id": str(session.id),
+        "active_leaf_id": str(session.active_leaf_id),
     }
 
 
