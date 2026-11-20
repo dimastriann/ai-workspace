@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 
 import { useLogout, useMe } from "@/lib/queries/auth";
+import { usePublicSettings } from "@/lib/queries/public-settings";
 import { useUiStore } from "@/lib/stores/ui";
 
 import styles from "./app-sidebar.module.css";
@@ -87,6 +88,31 @@ const settingsNav: NavItem = {
   ),
 };
 
+const ideNav: NavItem = {
+  path: "/ide",
+  label: "IDE",
+  icon: (
+    <svg {...iconProps} aria-hidden="true">
+      <path d="M8 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+      <path d="M16 5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+      <line x1="9" y1="5" x2="15" y2="5" />
+      <line x1="9" y1="19" x2="15" y2="19" />
+    </svg>
+  ),
+};
+
+const terminalNav: NavItem = {
+  path: "/terminal",
+  label: "Terminal",
+  icon: (
+    <svg {...iconProps} aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="m7 9 3 3-3 3" />
+      <line x1="13" y1="15" x2="17" y2="15" />
+    </svg>
+  ),
+};
+
 const usersNav: NavItem = {
   path: "/users",
   label: "Users",
@@ -104,6 +130,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: user } = useMe();
+  const { data: flags } = usePublicSettings();
   const logout = useLogout();
   const sidebarOpen = useUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
@@ -135,7 +162,16 @@ export function AppSidebar() {
     };
   }, [sidebarOpen, setSidebarOpen]);
 
-  const items = user?.role === "admin" ? [...navItems, settingsNav, usersNav] : navItems;
+  const ideVisible = flags?.["features.code_server"] === true;
+  const terminalVisible = flags?.["features.terminal"] === true;
+  const baseItems = [...navItems];
+  if (terminalVisible) {
+    baseItems.push(terminalNav);
+  }
+  const items =
+    user?.role === "admin"
+      ? [...(ideVisible ? [...baseItems, ideNav] : baseItems), settingsNav, usersNav]
+      : baseItems;
 
   return (
     <>
