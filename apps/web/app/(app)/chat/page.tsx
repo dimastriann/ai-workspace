@@ -315,6 +315,9 @@ export default function ChatPage() {
       setSlashError(null);
       await editMessage(editingMessageId, content, disabledMcpTools);
       setEditingMessageId(null);
+      if (sessionId) {
+        await loadSession(sessionId);
+      }
       return;
     }
 
@@ -378,15 +381,12 @@ export default function ChatPage() {
     }
   }
 
-  async function chooseAlternative(messageId: string, index: number) {
-    const response = await fetch(
-      `/api/chat/messages/${encodeURIComponent(messageId)}/alternative`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ index }),
-      },
-    );
+  async function chooseBranch(messageId: string, index: number) {
+    const response = await fetch(`/api/chat/messages/${encodeURIComponent(messageId)}/branch`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ index }),
+    });
     if (response.ok && sessionId) {
       await loadSession(sessionId);
     }
@@ -654,31 +654,29 @@ export default function ChatPage() {
                         Edit
                       </button>
                     ) : null}
-                    {(message.alternativeCount ?? 1) > 1 ? (
+                    {(message.branchCount ?? 1) > 1 ? (
                       <span className={styles.branchControls}>
                         <button
                           type="button"
                           className={styles.branchButton}
-                          aria-label="Previous response"
-                          disabled={(message.alternativeIndex ?? 0) === 0}
+                          aria-label="Previous branch"
+                          disabled={(message.branchIndex ?? 0) === 0}
                           onClick={() =>
-                            void chooseAlternative(message.id, (message.alternativeIndex ?? 0) - 1)
+                            void chooseBranch(message.id, (message.branchIndex ?? 0) - 1)
                           }
                         >
                           &lt;
                         </button>
                         <span>
-                          {(message.alternativeIndex ?? 0) + 1}/{message.alternativeCount}
+                          {(message.branchIndex ?? 0) + 1}/{message.branchCount}
                         </span>
                         <button
                           type="button"
                           className={styles.branchButton}
-                          aria-label="Next response"
-                          disabled={
-                            (message.alternativeIndex ?? 0) + 1 >= (message.alternativeCount ?? 1)
-                          }
+                          aria-label="Next branch"
+                          disabled={(message.branchIndex ?? 0) + 1 >= (message.branchCount ?? 1)}
                           onClick={() =>
-                            void chooseAlternative(message.id, (message.alternativeIndex ?? 0) + 1)
+                            void chooseBranch(message.id, (message.branchIndex ?? 0) + 1)
                           }
                         >
                           &gt;

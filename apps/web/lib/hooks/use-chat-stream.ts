@@ -264,8 +264,8 @@ export function useChatStream() {
         role: message.role,
         content: message.content,
         sources: [],
-        alternativeCount: message.alternative_count,
-        alternativeIndex: message.alternative_index,
+        branchCount: message.branch_count,
+        branchIndex: message.branch_index,
       })),
     );
   }, []);

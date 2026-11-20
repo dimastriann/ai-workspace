@@ -47,8 +47,8 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   sources?: Source[];
-  alternativeCount?: number;
-  alternativeIndex?: number;
+  branchCount?: number;
+  branchIndex?: number;
 }
 
 export type Role = "admin" | "member" | "viewer";
@@ -205,8 +205,8 @@ export interface ChatMessageRecord {
   id: string;
   role: ChatRole;
   content: string;
-  alternative_count: number;
-  alternative_index: number;
+  branch_count: number;
+  branch_index: number;
   created_at: string;
 }
 
