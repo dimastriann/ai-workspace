@@ -6,7 +6,7 @@ import { usePublicSettings } from "@/lib/queries/public-settings";
 
 import styles from "./page.module.css";
 
-const IDE_URL = process.env.NEXT_PUBLIC_IDE_URL ?? "http://ide.localhost:8090";
+const IDE_URL = process.env.NEXT_PUBLIC_IDE_URL ?? "http://localhost:8091";
 
 export default function IdePage() {
   const { data: user } = useMe();

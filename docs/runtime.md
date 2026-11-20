@@ -22,12 +22,14 @@ This starts:
 
 | Service | Local URL |
 | --- | --- |
-| App | `http://app.localhost:8090` |
-| IDE | `http://ide.localhost:8090` |
-| Terminal | `http://terminal.localhost:8090` |
+| App | `http://localhost:8090` |
+| IDE | `http://localhost:8091` |
+| Terminal | `http://localhost:8092` |
 
-Hostnames ending in `.localhost` resolve to loopback on most modern systems. Caddy uses
-host-based routing; production deployments can use real DNS names and TLS instead.
+Locally, routes use dedicated ports so the session cookie set for `localhost` is sent to
+the runtime services. In production, hostnames (for example `app.example.com`,
+`ide.example.com`, and `terminal.example.com`) can be used with TLS and a shared cookie
+domain.
 
 ## Enabling in the UI
 
@@ -82,7 +84,7 @@ Defaults are `false`. Set `RUNTIME_INSTALL_NODE=true` / `RUNTIME_INSTALL_PYTHON=
 
 | Variable | Purpose |
 | --- | --- |
-| `SESSION_COOKIE_DOMAIN` | Shared cookie domain (e.g. `.localhost` or `.example.com`) |
+| `SESSION_COOKIE_DOMAIN` | Shared cookie domain in production (e.g. `.example.com`) |
 | `NEXT_PUBLIC_IDE_URL` | IDE URL shown/embedded by the web UI |
 | `NEXT_PUBLIC_TERMINAL_URL` | Terminal URL shown/embedded by the web UI |
 | `RUNTIME_INSTALL_NODE` | Install Node in the runtime image |

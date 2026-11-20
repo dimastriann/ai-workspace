@@ -4,6 +4,11 @@ FROM node:24-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV LEFTHOOK="0"
+# Public runtime URLs are inlined by Next at build time.
+ARG NEXT_PUBLIC_IDE_URL=http://localhost:8091
+ARG NEXT_PUBLIC_TERMINAL_URL=http://localhost:8092
+ENV NEXT_PUBLIC_IDE_URL=$NEXT_PUBLIC_IDE_URL
+ENV NEXT_PUBLIC_TERMINAL_URL=$NEXT_PUBLIC_TERMINAL_URL
 RUN apk add --no-cache git && corepack enable
 WORKDIR /repo
 

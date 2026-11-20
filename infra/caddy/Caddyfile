@@ -3,12 +3,12 @@
 }
 
 # Core app
-http://app.localhost {
+:8090 {
 	reverse_proxy web:3000
 }
 
 # Browser IDE (admin only)
-http://ide.localhost {
+:8091 {
 	forward_auth api:8000 {
 		uri /api/auth/verify?role=admin
 	}
@@ -16,7 +16,7 @@ http://ide.localhost {
 }
 
 # Browser terminal (member and above, workspace read-only)
-http://terminal.localhost {
+:8092 {
 	forward_auth api:8000 {
 		uri /api/auth/verify?role=member
 	}

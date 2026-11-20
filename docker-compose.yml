@@ -8,12 +8,15 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_IDE_URL: ${NEXT_PUBLIC_IDE_URL:-http://localhost:8091}
+        NEXT_PUBLIC_TERMINAL_URL: ${NEXT_PUBLIC_TERMINAL_URL:-http://localhost:8092}
     ports:
       - "3000:3000"
     environment:
       - API_BASE_URL=http://api:8000
-      - NEXT_PUBLIC_IDE_URL=${NEXT_PUBLIC_IDE_URL:-http://ide.localhost:8090}
-      - NEXT_PUBLIC_TERMINAL_URL=${NEXT_PUBLIC_TERMINAL_URL:-http://terminal.localhost:8090}
+      - NEXT_PUBLIC_IDE_URL=${NEXT_PUBLIC_IDE_URL:-http://localhost:8091}
+      - NEXT_PUBLIC_TERMINAL_URL=${NEXT_PUBLIC_TERMINAL_URL:-http://localhost:8092}
     depends_on:
       - api
 
@@ -155,7 +158,9 @@ services:
     image: caddy:2-alpine
     profiles: ["runtime"]
     ports:
-      - "8090:80"
+      - "8090:8090"
+      - "8091:8091"
+      - "8092:8092"
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

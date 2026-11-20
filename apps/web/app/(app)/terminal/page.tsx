@@ -6,7 +6,7 @@ import { usePublicSettings } from "@/lib/queries/public-settings";
 
 import styles from "./page.module.css";
 
-const TERMINAL_URL = process.env.NEXT_PUBLIC_TERMINAL_URL ?? "http://terminal.localhost:8090";
+const TERMINAL_URL = process.env.NEXT_PUBLIC_TERMINAL_URL ?? "http://localhost:8092";
 
 export default function TerminalPage() {
   const { data: user } = useMe();
