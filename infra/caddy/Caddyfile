@@ -11,14 +11,24 @@
 :8091 {
 	forward_auth api:8000 {
 		uri /api/auth/verify?role=admin
+		header_up Connection ""
+		header_up Upgrade ""
 	}
-	reverse_proxy runtime-ide:8080
+	reverse_proxy runtime-ide:8080 {
+		header_up Host {host}:8091
+		header_up X-Forwarded-Host {host}:8091
+	}
 }
 
 # Browser terminal (member and above, workspace read-only)
 :8092 {
 	forward_auth api:8000 {
 		uri /api/auth/verify?role=member
+		header_up Connection ""
+		header_up Upgrade ""
 	}
-	reverse_proxy runtime-terminal:7681
+	reverse_proxy runtime-terminal:7681 {
+		header_up Host {host}:8092
+		header_up X-Forwarded-Host {host}:8092
+	}
 }
