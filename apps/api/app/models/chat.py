@@ -98,6 +98,11 @@ class ChatEditRequest(BaseModel):
     session_id: str
     message: str = Field(..., min_length=1, max_length=4000)
     disabled_mcp_tools: list[str] = Field(default_factory=list, max_length=200)
+    attachment_ids: list[str] | None = Field(
+        default=None,
+        max_length=5,
+        description="Replacement attachment list; omitted keeps the originals",
+    )
 
 
 class ChatModelsResponse(BaseModel):

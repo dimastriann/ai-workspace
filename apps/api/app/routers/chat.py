@@ -311,6 +311,7 @@ async def edit_message(
                 db,
                 user.id,
                 body.disabled_mcp_tools,
+                body.attachment_ids,
             ):
                 yield "data: " + json.dumps({"token": token}) + "\n\n"
         except ChatValidationError as exc:

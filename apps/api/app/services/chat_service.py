@@ -455,6 +455,7 @@ class ChatService:
         db: AsyncSession,
         user_id: UUID,
         disabled_mcp_tools: list[str] | None = None,
+        attachment_ids: list[str] | None = None,
     ) -> AsyncGenerator[str]:
         """Edit a user message as a new conversation branch."""
         session = await self.get_session(session_id, user_id, db)
@@ -471,11 +472,16 @@ class ChatService:
             raise ChatValidationError("User message not found")
 
         target = active[target_index]
+        resolved_attachments = (
+            json.dumps(attachment_ids)
+            if attachment_ids is not None
+            else target.attachment_ids
+        )
         new_user = ChatMessage(
             session_id=session_id,
             role="user",
             content=new_content.strip(),
-            attachment_ids=target.attachment_ids,
+            attachment_ids=resolved_attachments,
             parent_id=target.parent_id,
             created_at=_utcnow(),
         )

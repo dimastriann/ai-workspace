@@ -1,5 +1,6 @@
 """Tests for the provider-backed chat stream."""
 
+import json
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -7,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.database import ChatMessage, ChatSession, Workspace
+from app.models.database import ChatAttachment, ChatMessage, ChatSession, Workspace
 from app.models.enums import Role
 from app.services.agent_provider import ProviderEvent, ToolCall
 from app.services.auth_service import auth_service
@@ -368,3 +369,67 @@ async def test_edit_message_creates_branch(db_session: AsyncSession) -> None:
         "Original question",
         "Old answer",
     ]
+
+
+async def test_edit_message_can_replace_attachments(db_session: AsyncSession) -> None:
+    workspace = Workspace(id=uuid.uuid4(), name="Test")
+    db_session.add(workspace)
+    await db_session.commit()
+    user = await auth_service.create_user(
+        email=f"edit-attach-{uuid.uuid4()}@example.com",
+        password="password123",
+        role=Role.MEMBER,
+        db=db_session,
+    )
+    session = ChatSession(
+        id=uuid.uuid4(),
+        workspace_id=workspace.id,
+        user_id=user.id,
+        title="Edit attachments",
+    )
+    db_session.add(session)
+    original = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        role="user",
+        content="With attachments",
+        attachment_ids=json.dumps([str(uuid.uuid4()), str(uuid.uuid4())]),
+    )
+    db_session.add(original)
+    await db_session.commit()
+
+    keep_id = str(uuid.uuid4())
+    replacement = ChatAttachment(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        filename="kept.png",
+        size_bytes=3,
+        content_text="",
+        is_image=True,
+    )
+    db_session.add(replacement)
+    await db_session.commit()
+
+    service = ChatService(provider=FakeProvider(["Answer"]))
+    tokens = [
+        token
+        async for token in service.edit_message_stream(
+            session.id,
+            original.id,
+            "Edited with fewer attachments",
+            db_session,
+            user.id,
+            attachment_ids=[keep_id, str(replacement.id)],
+        )
+    ]
+    assert "".join(tokens) == "Answer"
+
+    refreshed = await service.get_session(session.id, user.id, db_session)
+    edited = next(
+        message
+        for message in refreshed.messages
+        if message.content == "Edited with fewer attachments"
+    )
+    assert json.loads(edited.attachment_ids) == [keep_id, str(replacement.id)]
+    # The original branch keeps its own attachments.
+    assert json.loads(original.attachment_ids) != json.loads(edited.attachment_ids)
