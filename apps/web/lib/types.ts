@@ -164,6 +164,7 @@ export interface McpServer {
   command: string[] | null;
   env_names: string[];
   header_names: string[];
+  oauth_connected: boolean;
   enabled: boolean;
   timeout_seconds: number;
   disabled_tools: string[];

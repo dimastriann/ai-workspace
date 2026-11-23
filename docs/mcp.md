@@ -36,6 +36,21 @@ workflows. MCP is optional, admin-managed, and disabled by default.
 - **Tools:** all discovered tools are enabled by default; disable individual tools from the
   **Test** dialog.
 
+## OAuth for remote servers
+
+Remote MCP servers that require user authorization use the MCP authorization flow:
+
+1. Click **Connect OAuth** on a remote server. The app discovers the server's
+   authorization server, registers itself dynamically (RFC 7591), and opens a popup with
+   the authorization URL (authorization code + PKCE).
+2. Approve access at the provider; the popup redirects to the app and closes itself.
+3. Tokens are stored encrypted on the server row and sent as Bearer credentials on MCP
+   calls. Access tokens are refreshed proactively near expiry.
+4. **Disconnect OAuth** removes the stored tokens.
+
+Manual static credentials still work: an `Authorization` header set by the admin always
+takes precedence over OAuth tokens.
+
 ## Using MCP in chat
 
 Type `/mcp` in AI Chat to open the MCP panel. It shows configured servers, connection

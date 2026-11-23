@@ -95,6 +95,33 @@ export function useTestMcpServer() {
   });
 }
 
+export function useStartMcpOAuth() {
+  return useServerMutation(async (serverId: string) => {
+    const response = await fetch(`/api/mcp/servers/${encodeURIComponent(serverId)}/oauth`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        redirect_uri: `${window.location.origin}/api/mcp/oauth/callback`,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to start OAuth flow");
+    }
+    return (await response.json()) as { authorize_url: string };
+  });
+}
+
+export function useDisconnectMcpOAuth() {
+  return useServerMutation(async (serverId: string) => {
+    const response = await fetch(`/api/mcp/servers/${encodeURIComponent(serverId)}/oauth`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to disconnect OAuth");
+    }
+  });
+}
+
 async function fetchStatus(): Promise<McpStatus> {
   const response = await fetch("/api/mcp/status");
   if (!response.ok) {

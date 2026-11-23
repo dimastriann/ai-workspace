@@ -7,7 +7,9 @@ import {
   type McpServerInput,
   useCreateMcpServer,
   useDeleteMcpServer,
+  useDisconnectMcpOAuth,
   useMcpServers,
+  useStartMcpOAuth,
   useTestMcpServer,
   useUpdateMcpServer,
 } from "@/lib/queries/mcp";
@@ -25,6 +27,9 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
   const updateServer = useUpdateMcpServer();
   const deleteServer = useDeleteMcpServer();
   const testServer = useTestMcpServer();
+  const startOAuth = useStartMcpOAuth();
+  const disconnectOAuth = useDisconnectMcpOAuth();
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<McpServer | null>(null);
@@ -234,6 +239,25 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
     }
   }
 
+  async function connectOAuth(server: McpServer) {
+    setOauthError(null);
+    try {
+      const result = await startOAuth.mutateAsync(server.id);
+      window.open(result.authorize_url, "_blank", "noopener,width=600,height=720");
+    } catch {
+      setOauthError(`Could not start the OAuth flow for ${server.name}.`);
+    }
+  }
+
+  async function removeOAuth(server: McpServer) {
+    setOauthError(null);
+    try {
+      await disconnectOAuth.mutateAsync(server.id);
+    } catch {
+      setOauthError(`Could not disconnect OAuth for ${server.name}.`);
+    }
+  }
+
   async function handleDelete() {
     if (!pendingDelete) {
       return;
@@ -264,6 +288,8 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
             agents.
           </p>
         ) : null}
+
+        {oauthError ? <p className={styles.error}>{oauthError}</p> : null}
 
         {isLoading ? (
           <p className={styles.notice}>Loading MCP servers…</p>
@@ -314,6 +340,27 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
                       updateServer.mutate({ serverId: server.id, enabled: checked })
                     }
                   />
+                  {server.transport !== "stdio" ? (
+                    server.oauth_connected ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={disconnectOAuth.isPending}
+                        onClick={() => removeOAuth(server)}
+                      >
+                        Disconnect OAuth
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={startOAuth.isPending}
+                        onClick={() => connectOAuth(server)}
+                      >
+                        Connect OAuth
+                      </Button>
+                    )
+                  ) : null}
                   <Button
                     size="sm"
                     variant="secondary"
