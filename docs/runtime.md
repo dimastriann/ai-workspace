@@ -52,8 +52,12 @@ Both services mount the same `api_uploads` volume used by documents:
 - IDE: `/home/coder/workspace` (read-write)
 - Terminal: `/home/coder/workspace` (read-only)
 
-This is one shared workspace for v1, as agreed. Users can browse and edit uploaded
-documents and conversion artifacts.
+Each app workspace has its own subdirectory named by workspace id; uploaded documents
+and conversion artifacts live inside it. The IDE page follows the **active workspace**
+selected in the app and opens code-server at `/home/coder/workspace/<workspace_id>`;
+with no workspace selected it opens the shared root. The terminal always starts at the
+shared root (ttyd has no per-session working directory). Workspaces are stamped on
+creation with a `README.md` holding the workspace name and description.
 
 ## Security model
 
@@ -63,8 +67,9 @@ documents and conversion artifacts.
 - `no-new-privileges`, dropped capabilities, tmpfs `/tmp`, CPU/memory limits.
 - Forward-auth on every request; no direct host ports for runtime services.
 - The terminal mount is read-only by default; members cannot mutate workspace files.
-- AuditIDE/terminal **session-level auditing is not yet implemented**; do not expose this
-  profile on the public internet until it is.
+- Session auditing: Caddy forward-auth passes `service=ide|terminal` to the verify
+  endpoint, which records a throttled `runtime.<service>.access` audit entry (one per
+  user, service, and five-minute window).
 
 ## Optional runtimes
 

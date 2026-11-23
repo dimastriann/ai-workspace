@@ -81,15 +81,30 @@ async def me(user: User = Depends(get_current_user)) -> UserResponse:
     return to_user_response(user)
 
 
+RUNTIME_SERVICES = ("ide", "terminal")
+
+
 @router.get("/verify", status_code=status.HTTP_204_NO_CONTENT)
 async def verify_session(
+    request: Request,
     role: Role | None = Query(None),
+    service: str | None = Query(None, pattern="^(ide|terminal)$"),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ) -> Response:
     """Validate a session for reverse-proxy forward authentication."""
     required = role or Role.VIEWER
     if not role_at_least(user.role, required):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        )
+    if service in RUNTIME_SERVICES:
+        # Caddy forward-auth calls this on every proxied request; the throttle
+        # keeps one audit entry per user, service, and window.
+        await audit_service.record_throttled(
+            db,
+            action=f"runtime.{service}.access",
+            actor_id=user.id,
+            ip=request.client.host if request.client else None,
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

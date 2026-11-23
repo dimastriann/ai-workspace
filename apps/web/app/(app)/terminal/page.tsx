@@ -3,6 +3,8 @@
 import { Button, Card } from "@/components/ui";
 import { useMe } from "@/lib/queries/auth";
 import { usePublicSettings } from "@/lib/queries/public-settings";
+import { useWorkspaces } from "@/lib/queries/workspaces";
+import { useWorkspaceStore } from "@/lib/stores/workspace";
 
 import styles from "./page.module.css";
 
@@ -11,6 +13,9 @@ const TERMINAL_URL = process.env.NEXT_PUBLIC_TERMINAL_URL ?? "http://localhost:8
 export default function TerminalPage() {
   const { data: user } = useMe();
   const { data: flags, isLoading } = usePublicSettings();
+  const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const { data: workspaces = [] } = useWorkspaces();
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
   const enabled = flags?.["features.terminal"] === true;
   const allowed = user?.role === "member" || user?.role === "admin";
 
@@ -19,7 +24,7 @@ export default function TerminalPage() {
       <header className={styles.header}>
         <h1 className={styles.title}>Workspace Terminal</h1>
         <p className={styles.secondary}>
-          Browse the shared workspace in a read-only terminal. This optional service is disabled by
+          Browse the workspace files in a read-only terminal. This optional service is disabled by
           default.
         </p>
       </header>
@@ -36,15 +41,24 @@ export default function TerminalPage() {
           <p className={styles.notice}>Terminal access requires member access.</p>
         ) : null}
         {enabled && allowed ? (
-          <div className={styles.actions}>
-            <Button
-              variant="primary"
-              onClick={() => window.open(TERMINAL_URL, "_blank", "noopener")}
-            >
-              Open terminal
-            </Button>
-            <span className={styles.url}>{TERMINAL_URL}</span>
-          </div>
+          <>
+            <div className={styles.actions}>
+              <Button
+                variant="primary"
+                onClick={() => window.open(TERMINAL_URL, "_blank", "noopener")}
+              >
+                Open terminal
+              </Button>
+              <span className={styles.url}>{TERMINAL_URL}</span>
+            </div>
+            {activeWorkspace ? (
+              <p className={styles.notice}>
+                Active workspace: <strong>{activeWorkspace.name}</strong> — the shell starts at the
+                shared root; its files are in{" "}
+                <code>/home/coder/workspace/{activeWorkspace.id}</code>.
+              </p>
+            ) : null}
+          </>
         ) : null}
       </Card>
 
