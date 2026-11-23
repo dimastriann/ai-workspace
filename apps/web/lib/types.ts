@@ -42,11 +42,20 @@ export interface Source {
   snippet: string;
 }
 
+export interface ChatAttachment {
+  id: string;
+  filename: string;
+  size_bytes: number;
+  characters: number;
+  is_image: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   sources?: Source[];
+  attachments?: ChatAttachment[];
   branchCount?: number;
   branchIndex?: number;
 }
@@ -210,6 +219,7 @@ export interface ChatMessageRecord {
   content: string;
   branch_count: number;
   branch_index: number;
+  attachments?: ChatAttachment[];
   created_at: string;
 }
 

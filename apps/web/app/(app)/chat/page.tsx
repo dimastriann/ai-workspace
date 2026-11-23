@@ -340,6 +340,7 @@ export default function ChatPage() {
       disabledMcpTools,
       model || null,
       attachments.map((attachment) => attachment.id),
+      attachments,
     );
     setAttachments([]);
     setAttachmentError(null);
@@ -620,7 +621,25 @@ export default function ChatPage() {
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                     </div>
                   ) : (
-                    <div className={styles.userText}>{message.content}</div>
+                    <>
+                      {message.attachments?.some((attachment) => attachment.is_image) ? (
+                        <div className={styles.messageImages}>
+                          {message.attachments
+                            .filter((attachment) => attachment.is_image)
+                            .map((attachment) => (
+                              /* biome-ignore lint/performance/noImgElement: dynamic user-uploaded image served by the API */
+                              <img
+                                key={attachment.id}
+                                className={styles.messageImage}
+                                src={`/api/chat/attachments/${encodeURIComponent(attachment.id)}/file`}
+                                alt={attachment.filename}
+                                loading="lazy"
+                              />
+                            ))}
+                        </div>
+                      ) : null}
+                      <div className={styles.userText}>{message.content}</div>
+                    </>
                   )}
                   {message.role === "assistant" ? <SourceList sources={message.sources} /> : null}
                   <div className={styles.messageActions}>
@@ -755,6 +774,15 @@ export default function ChatPage() {
               <div className={styles.attachmentBar}>
                 {attachments.map((attachment) => (
                   <span key={attachment.id} className={styles.attachmentChip}>
+                    {attachment.is_image ? (
+                      /* biome-ignore lint/performance/noImgElement: dynamic user-uploaded image served by the API */
+                      <img
+                        className={styles.attachmentThumb}
+                        src={`/api/chat/attachments/${encodeURIComponent(attachment.id)}/file`}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : null}
                     <span className={styles.attachmentName}>{attachment.filename}</span>
                     <button
                       type="button"
@@ -775,7 +803,7 @@ export default function ChatPage() {
                 type="file"
                 className={styles.hiddenFile}
                 multiple
-                accept=".pdf,.md,.markdown,.csv,.txt,.json,.yaml,.yml,.py,.js,.jsx,.ts,.tsx,.rs,.go,.java"
+                accept=".pdf,.md,.markdown,.csv,.txt,.json,.yaml,.yml,.py,.js,.jsx,.ts,.tsx,.rs,.go,.java,.png,.jpg,.jpeg,.webp,.gif"
                 aria-label="Attach files"
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);

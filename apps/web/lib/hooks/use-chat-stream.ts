@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import type { ChatMessage, ChatRole, ChatSessionDetail, Source } from "@/lib/types";
+import type { ChatAttachment, ChatMessage, ChatRole, ChatSessionDetail, Source } from "@/lib/types";
 
 interface StreamPayload {
   token?: string;
@@ -107,13 +107,14 @@ export function useChatStream() {
       disabledMcpTools: string[] = [],
       model: string | null = null,
       attachmentIds: string[] = [],
+      attachments: ChatAttachment[] = [],
     ) => {
       if (!content.trim() || isStreaming) {
         return;
       }
 
       setError(null);
-      setMessages((previous) => [...previous, createMessage("user", content)]);
+      setMessages((previous) => [...previous, { ...createMessage("user", content), attachments }]);
       setStreamingContent("");
       setStreamingSources([]);
       setIsStreaming(true);
@@ -264,6 +265,7 @@ export function useChatStream() {
         role: message.role,
         content: message.content,
         sources: [],
+        attachments: message.attachments ?? [],
         branchCount: message.branch_count,
         branchIndex: message.branch_index,
       })),

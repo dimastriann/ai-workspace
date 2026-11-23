@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { ChatModels, ChatSessionSummary } from "@/lib/types";
+import type { ChatAttachment, ChatModels, ChatSessionSummary } from "@/lib/types";
 
 export const chatModelKeys = { all: ["chat-models"] as const };
 
@@ -111,12 +111,7 @@ export function useUploadChatAttachment() {
               : "Could not upload the attachment.",
         );
       }
-      return (await response.json()) as {
-        id: string;
-        filename: string;
-        size_bytes: number;
-        characters: number;
-      };
+      return (await response.json()) as ChatAttachment;
     },
   });
 }
