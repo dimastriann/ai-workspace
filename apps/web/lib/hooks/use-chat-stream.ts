@@ -200,7 +200,13 @@ export function useChatStream() {
   );
 
   const editMessage = useCallback(
-    async (messageId: string, content: string, disabledMcpTools: string[] = []) => {
+    async (
+      messageId: string,
+      content: string,
+      disabledMcpTools: string[] = [],
+      attachmentIds?: string[],
+      attachments: ChatAttachment[] = [],
+    ) => {
       if (!sessionId || isStreaming || !content.trim()) {
         return;
       }
@@ -211,7 +217,10 @@ export function useChatStream() {
         if (index < 0) {
           return previous;
         }
-        return [...previous.slice(0, index), { ...previous[index], content: content.trim() }];
+        return [
+          ...previous.slice(0, index),
+          { ...previous[index], content: content.trim(), attachments },
+        ];
       });
       setStreamingContent("");
       setStreamingSources([]);
@@ -228,6 +237,7 @@ export function useChatStream() {
             session_id: sessionId,
             message: content.trim(),
             disabled_mcp_tools: disabledMcpTools,
+            ...(attachmentIds !== undefined ? { attachment_ids: attachmentIds } : {}),
           }),
           signal: controller.signal,
         });

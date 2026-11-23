@@ -313,8 +313,16 @@ export default function ChatPage() {
     if (editingMessageId) {
       setInput("");
       setSlashError(null);
-      await editMessage(editingMessageId, content, disabledMcpTools);
+      await editMessage(
+        editingMessageId,
+        content,
+        disabledMcpTools,
+        attachments.map((attachment) => attachment.id),
+        attachments,
+      );
       setEditingMessageId(null);
+      setAttachments([]);
+      setAttachmentError(null);
       if (sessionId) {
         await loadSession(sessionId);
       }
@@ -367,6 +375,8 @@ export default function ChatPage() {
     setEditingMessageId(id);
     setInput(content);
     setSlashError(null);
+    const source = messages.find((message) => message.id === id);
+    setAttachments(source?.attachments ? [...source.attachments] : []);
     composerRef.current?.focus();
   }
 

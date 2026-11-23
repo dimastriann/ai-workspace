@@ -1,5 +1,5 @@
-import { act, renderHook } from "@testing-library/react";
 import { TextEncoder } from "node:util";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useWorkflowStream } from "./use-workflow-stream";

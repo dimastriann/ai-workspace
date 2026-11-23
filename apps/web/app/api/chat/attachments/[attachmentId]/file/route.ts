@@ -1,4 +1,4 @@
-import { proxyWithCookies } from "@/lib/api";
+import { proxyFile } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -7,9 +7,5 @@ export async function GET(
   context: { params: Promise<{ attachmentId: string }> },
 ) {
   const { attachmentId } = await context.params;
-  return proxyWithCookies(
-    `/api/chat/attachments/${encodeURIComponent(attachmentId)}/file`,
-    request,
-    { method: "GET" },
-  );
+  return proxyFile(`/api/chat/attachments/${encodeURIComponent(attachmentId)}/file`, request);
 }
