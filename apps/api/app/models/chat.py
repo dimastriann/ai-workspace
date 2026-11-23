@@ -56,6 +56,7 @@ class ChatMessageItem(BaseModel):
     content: str
     branch_count: int = 1
     branch_index: int = 0
+    attachments: list["ChatAttachmentResponse"] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -113,6 +114,7 @@ class ChatAttachmentResponse(BaseModel):
     filename: str
     size_bytes: int
     characters: int
+    is_image: bool = False
 
 
 class ChatBranchRequest(BaseModel):

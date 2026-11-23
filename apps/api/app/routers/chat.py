@@ -5,6 +5,7 @@ Endpoints for streaming conversational AI interactions.
 """
 
 import json
+import uuid
 from uuid import UUID
 
 from fastapi import (
@@ -18,6 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -40,7 +42,7 @@ from app.models.chat import (
     ChatSessionRename,
     ChatSessionSummary,
 )
-from app.models.database import ChatMessage, ChatSession, User
+from app.models.database import ChatAttachment, ChatMessage, ChatSession, User
 from app.services.chat_service import chat_service
 from app.services.settings_service import settings_service
 
@@ -67,7 +69,10 @@ def _alternatives(message: ChatMessage) -> list[str]:
         return []
 
 
-def _session_detail(session: ChatSession) -> ChatSessionDetail:
+def _session_detail(
+    session: ChatSession,
+    attachments: dict[str, ChatAttachmentResponse],
+) -> ChatSessionDetail:
     active = chat_service._active_messages(session)
     summary = _session_summary(session, len(session.messages))
     items: list[ChatMessageItem] = []
@@ -80,10 +85,41 @@ def _session_detail(session: ChatSession) -> ChatSessionDetail:
                 content=message.content,
                 branch_count=len(siblings),
                 branch_index=siblings.index(message),
+                attachments=[
+                    attachments[attachment_id]
+                    for attachment_id in chat_service._attachment_ids(message)
+                    if attachment_id in attachments
+                ],
                 created_at=message.created_at,
             )
         )
     return ChatSessionDetail(**summary.model_dump(), messages=items)
+
+
+async def _attachments_for_messages(
+    messages: list[ChatMessage], db: AsyncSession
+) -> dict[str, ChatAttachmentResponse]:
+    """Load attachment metadata for every attachment referenced by messages."""
+    ids: list[uuid.UUID] = []
+    for message in messages:
+        for attachment_id in chat_service._attachment_ids(message):
+            try:
+                ids.append(uuid.UUID(attachment_id))
+            except ValueError:
+                continue
+    if not ids:
+        return {}
+    result = await db.execute(select(ChatAttachment).where(ChatAttachment.id.in_(ids)))
+    return {
+        str(attachment.id): ChatAttachmentResponse(
+            id=str(attachment.id),
+            filename=attachment.filename,
+            size_bytes=attachment.size_bytes,
+            characters=len(attachment.content_text),
+            is_image=attachment.is_image,
+        )
+        for attachment in result.scalars().all()
+    }
 
 
 @router.get("/models", response_model=ChatModelsResponse)
@@ -125,7 +161,10 @@ async def get_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
-    return _session_detail(session)
+    attachments = await _attachments_for_messages(
+        chat_service._active_messages(session), db
+    )
+    return _session_detail(session, attachments)
 
 
 @router.patch("/sessions/{session_id}", response_model=ChatSessionSummary)
@@ -316,6 +355,32 @@ async def upload_attachment(
         filename=attachment.filename,
         size_bytes=attachment.size_bytes,
         characters=len(attachment.content_text),
+        is_image=attachment.is_image,
+    )
+
+
+@router.get("/attachments/{attachment_id}/file")
+async def download_attachment(
+    attachment_id: UUID,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_member),
+) -> Response:
+    """Serve a stored image attachment to its owner."""
+    attachment = await db.get(ChatAttachment, attachment_id)
+    if attachment is None or attachment.user_id != user.id or not attachment.is_image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
+        )
+    data = await chat_service.read_attachment_file(attachment)
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file missing"
+        )
+    mime = chat_service.image_mime(attachment.filename) or "application/octet-stream"
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"cache-control": "private, max-age=3600"},
     )
 
 

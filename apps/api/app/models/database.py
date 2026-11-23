@@ -460,6 +460,7 @@ class ChatAttachment(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     size_bytes: Mapped[int] = mapped_column(nullable=False)
     content_text: Mapped[str] = mapped_column(Text, nullable=False)
+    is_image: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 

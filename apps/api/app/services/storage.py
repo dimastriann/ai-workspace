@@ -21,6 +21,12 @@ def conversion_dir(workspace_id: UUID, document_id: UUID) -> Path:
     return UPLOADS_ROOT / str(workspace_id) / "converted" / str(document_id)
 
 
+def chat_attachment_path(user_id: UUID, attachment_id: UUID, filename: str) -> Path:
+    """Path of a stored chat attachment file."""
+    safe = Path(filename).name
+    return UPLOADS_ROOT / "chat" / str(user_id) / f"{attachment_id}_{safe}"
+
+
 def ensure_within_uploads(path: Path) -> Path:
     """Resolve a path and reject anything outside the uploads root."""
     root = UPLOADS_ROOT.resolve()

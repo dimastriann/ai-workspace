@@ -8,6 +8,7 @@ Orchestrates the conversational AI logic:
 """
 
 import asyncio
+import base64
 import json
 import uuid
 from collections.abc import AsyncGenerator
@@ -34,9 +35,19 @@ from app.services.audit_service import audit_service
 from app.services.mcp_service import mcp_service
 from app.services.parsing import extract_text
 from app.services.retrieval import retrieval_service
+from app.services.storage import chat_attachment_path
 from app.services.tools import ToolSpec, tool_registry
 
 MAX_CHAT_TOOL_ROUNDS = 4
+
+IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+IMAGE_MIME = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
 
 
 def _utcnow() -> datetime:
@@ -113,10 +124,11 @@ class ChatService:
     async def create_attachment(
         self, filename: str, data: bytes, user_id: UUID, db: AsyncSession
     ) -> ChatAttachment:
-        """Extract text from a chat attachment and persist it."""
+        """Persist a chat attachment; images are stored, text is extracted."""
         safe_name = Path(filename or "attachment").name
         suffix = Path(safe_name).suffix.lower().lstrip(".")
-        if suffix not in settings.allowed_upload_extension_set:
+        is_image = suffix in IMAGE_EXTENSIONS
+        if not is_image and suffix not in settings.allowed_upload_extension_set:
             raise UnsupportedFileTypeError(
                 f"Unsupported file type: {suffix or 'unknown'}"
             )
@@ -125,25 +137,91 @@ class ChatService:
                 f"File exceeds the {settings.max_upload_mb} MB limit"
             )
 
-        text = await asyncio.to_thread(extract_text, safe_name, data)
+        text = ""
+        attachment_id = uuid4()
+        if is_image:
+            storage_path = chat_attachment_path(user_id, attachment_id, safe_name)
+            storage_path.parent.mkdir(parents=True, exist_ok=True)
+            storage_path.write_bytes(data)
+        else:
+            text = await asyncio.to_thread(extract_text, safe_name, data)
+
         text = text.strip()[:MAX_ATTACHMENT_CHARS]
         attachment = ChatAttachment(
+            id=attachment_id,
             user_id=user_id,
             filename=safe_name,
             size_bytes=len(data),
             content_text=text,
+            is_image=is_image,
         )
         db.add(attachment)
         await db.commit()
         await db.refresh(attachment)
         return attachment
 
+    async def read_attachment_file(self, attachment: ChatAttachment) -> bytes | None:
+        """Return the stored bytes for an image attachment."""
+        if not attachment.is_image:
+            return None
+        return await asyncio.to_thread(self._read_image_bytes, attachment)
+
+    @staticmethod
+    def image_mime(filename: str) -> str | None:
+        suffix = Path(filename).suffix.lower().lstrip(".")
+        return IMAGE_MIME.get(suffix)
+
     async def attachment_context(
         self, attachment_ids: list[str], user_id: UUID | None, db: AsyncSession
     ) -> str:
-        """Build labeled context from owned attachments."""
+        """Build labeled text context from owned non-image attachments."""
+        attachments = await self._owned_attachments(attachment_ids, user_id, db)
+        return "\n\n".join(
+            f"Attached file: {attachment.filename}\n{attachment.content_text}"
+            for attachment in attachments
+            if not attachment.is_image
+        )
+
+    async def attachment_image_parts(
+        self, attachment_ids: list[str], user_id: UUID | None, db: AsyncSession
+    ) -> list[dict[str, Any]]:
+        """Build provider image parts (data URIs) from owned image attachments."""
+        attachments = [
+            attachment
+            for attachment in await self._owned_attachments(attachment_ids, user_id, db)
+            if attachment.is_image
+        ]
+        parts: list[dict[str, Any]] = []
+        for attachment in attachments:
+            data = await asyncio.to_thread(self._read_image_bytes, attachment)
+            if data is None:
+                continue
+            mime = self.image_mime(attachment.filename) or "application/octet-stream"
+            encoded = base64.b64encode(data).decode()
+            parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{encoded}"},
+                }
+            )
+        return parts
+
+    @staticmethod
+    def _read_image_bytes(attachment: ChatAttachment) -> bytes | None:
+        path = chat_attachment_path(
+            attachment.user_id, attachment.id, attachment.filename
+        )
+        try:
+            return path.read_bytes()
+        except OSError:
+            return None
+
+    @staticmethod
+    async def _owned_attachments(
+        attachment_ids: list[str], user_id: UUID | None, db: AsyncSession
+    ) -> list[ChatAttachment]:
         if not attachment_ids or user_id is None:
-            return ""
+            return []
         ids: list[uuid.UUID] = []
         for value in attachment_ids:
             try:
@@ -151,20 +229,14 @@ class ChatService:
             except ValueError:
                 continue
         if not ids:
-            return ""
+            return []
         result = await db.execute(
             select(ChatAttachment).where(
                 ChatAttachment.id.in_(ids),
                 ChatAttachment.user_id == user_id,
             )
         )
-        attachments = list(result.scalars().all())
-        if not attachments:
-            return ""
-        return "\n\n".join(
-            f"Attached file: {attachment.filename}\n{attachment.content_text}"
-            for attachment in attachments
-        )
+        return list(result.scalars().all())
 
     @staticmethod
     def _attachment_ids(message: ChatMessage) -> list[str]:
@@ -265,11 +337,17 @@ class ChatService:
             )
 
         system_msg = self._system_prompt(context)
+        image_parts = await self.attachment_image_parts(
+            attachment_ids or [], user_id, db
+        )
+        user_content: str | list[dict[str, Any]] = message
+        if image_parts:
+            user_content = [{"type": "text", "text": message}, *image_parts]
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_msg},
             *self._history_from_messages(active),
-            {"role": "user", "content": message},
+            {"role": "user", "content": user_content},
         ]
 
         user_msg = ChatMessage(
@@ -334,10 +412,28 @@ class ChatService:
                 f"{context}\n\n{attachment_context}" if context else attachment_context
             )
         system_msg = self._system_prompt(context)
+        # history ends with the last user message; it is rebuilt below with
+        # image parts so its text is not sent twice.
         prompt = [
             {"role": "system", "content": system_msg},
-            *self._history_from_messages(history),
+            *self._history_from_messages(history[:-1]),
         ]
+        image_parts = await self.attachment_image_parts(
+            self._attachment_ids(last_user), user_id, db
+        )
+        prompt.append(
+            {
+                "role": "user",
+                "content": (
+                    [
+                        {"type": "text", "text": last_user.content},
+                        *image_parts,
+                    ]
+                    if image_parts
+                    else last_user.content
+                ),
+            }
+        )
 
         async for token in self._stream_completion(
             prompt,
@@ -402,8 +498,20 @@ class ChatService:
         prompt = [
             {"role": "system", "content": self._system_prompt(context)},
             *self._history_from_messages(active[:target_index]),
-            {"role": "user", "content": new_content.strip()},
         ]
+        image_parts = await self.attachment_image_parts(
+            self._attachment_ids(new_user), user_id, db
+        )
+        prompt.append(
+            {
+                "role": "user",
+                "content": (
+                    [{"type": "text", "text": new_content.strip()}, *image_parts]
+                    if image_parts
+                    else new_content.strip()
+                ),
+            }
+        )
 
         async for token in self._stream_completion(
             prompt,
