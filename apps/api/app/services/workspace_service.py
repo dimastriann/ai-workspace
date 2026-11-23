@@ -5,6 +5,7 @@ Handles creation and management of workspaces.
 """
 
 import uuid
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.database import Workspace
 from app.models.workspace import WorkspaceCreate
+from app.services.storage import UPLOADS_ROOT
 
 
 class WorkspaceService:
@@ -22,7 +24,24 @@ class WorkspaceService:
         db.add(db_workspace)
         await db.commit()
         await db.refresh(db_workspace)
+        WorkspaceService._write_runtime_readme(db_workspace)
         return db_workspace
+
+    @staticmethod
+    def _write_runtime_readme(workspace: Workspace) -> None:
+        """Stamp the workspace directory so runtime services can identify it.
+
+        The runtime IDE and terminal browse the uploads volume; the README makes
+        the workspace human-identifiable there. Failures never block creation.
+        """
+        try:
+            workspace_dir = Path(UPLOADS_ROOT) / str(workspace.id)
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            description = workspace.description or ""
+            body = f"# {workspace.name}\n\n{description}\n"
+            (workspace_dir / "README.md").write_text(body, encoding="utf-8")
+        except OSError:
+            pass
 
     @staticmethod
     async def list_workspaces(db: AsyncSession) -> list[Workspace]:
