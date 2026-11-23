@@ -160,7 +160,8 @@ async def test_refresh_grant_rotates_tokens(
 
     form = seen["token"].content.decode()
     assert "grant_type=refresh_token" in form
-    assert mcp_oauth_service.load_bundle(server)["access_token"] == "new"
+    rotated = mcp_oauth_service.load_bundle(server)
+    assert rotated is not None and rotated["access_token"] == "new"
 
 
 async def test_bearer_token_merged_into_config(db_session: AsyncSession) -> None:
