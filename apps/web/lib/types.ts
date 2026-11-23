@@ -148,7 +148,7 @@ export interface WorkflowStepInput {
   skill: string | null;
 }
 
-export type McpTransport = "http" | "sse";
+export type McpTransport = "http" | "sse" | "stdio";
 
 export interface McpTool {
   name: string;
@@ -161,6 +161,8 @@ export interface McpServer {
   name: string;
   transport: McpTransport;
   url: string;
+  command: string[] | null;
+  env_names: string[];
   header_names: string[];
   enabled: boolean;
   timeout_seconds: number;

@@ -16,16 +16,21 @@ workflows. MCP is optional, admin-managed, and disabled by default.
 | --- | --- |
 | Streamable HTTP | Recommended for hosted MCP endpoints (GitHub, Atlassian, etc.) |
 | HTTP + SSE | Legacy MCP endpoints that expose an SSE event stream |
-
-stdio servers are not supported yet. Run them behind a proxy such as `mcp-proxy` or a
-gateway that exposes a remote MCP URL, then register that URL here.
+| Local process (stdio) | Local MCP servers spawned by the API process |
 
 ## Configuration
 
 - **Name:** unique label used to namespace tools (`mcp__<name>__<tool>`).
-- **URL:** absolute HTTP(S) endpoint. HTTPS is required outside development.
-- **Headers:** optional JSON object, usually `{"Authorization": "Bearer <token>"}`.
-  Values are encrypted at rest and never returned by the API; only header names are shown.
+- **URL:** absolute HTTP(S) endpoint (remote transports). HTTPS is required outside
+  development.
+- **Command:** stdio transport only — a JSON array of argv strings, for example
+  `["uvx", "mcp-server-git", "--repository", "/home/coder/workspace"]`.
+- **Environment:** stdio transport only — optional JSON object merged over a minimal
+  default environment. Values are encrypted at rest and never returned by the API; only
+  variable names are shown.
+- **Headers:** remote transports only — optional JSON object, usually
+  `{"Authorization": "Bearer <token>"}`. Values are encrypted at rest and never returned
+  by the API; only header names are shown.
 - **Timeout:** per connect/list/call timeout, 1–60 seconds.
 - **Enabled:** disabled servers contribute no tools.
 - **Tools:** all discovered tools are enabled by default; disable individual tools from the
@@ -55,7 +60,10 @@ status, and discovered tools.
 - URLs are validated; private, loopback, link-local, and reserved addresses are rejected
   outside development.
 - Secrets are encrypted with the app secret and masked in API responses and logs.
-- No Docker socket or host process execution is involved (remote transport only).
+- stdio servers execute local processes inside the API container and are therefore gated
+  behind a separate `features.mcp_stdio` flag (off by default); commands are validated
+  argv lists run without a shell.
+- No Docker socket is involved.
 
 ## Troubleshooting
 

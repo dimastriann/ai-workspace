@@ -33,8 +33,10 @@ function useServerMutation<TInput, TResult>(mutationFn: (input: TInput) => Promi
 
 export interface McpServerInput {
   name: string;
-  transport: "http" | "sse";
+  transport: "http" | "sse" | "stdio";
   url: string;
+  command?: string[] | null;
+  env?: Record<string, string> | null;
   headers?: Record<string, string> | null;
   enabled: boolean;
   timeout_seconds: number;

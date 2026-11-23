@@ -29,8 +29,10 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<McpServer | null>(null);
   const [name, setName] = useState("");
-  const [transport, setTransport] = useState<"http" | "sse">("http");
+  const [transport, setTransport] = useState<"http" | "sse" | "stdio">("http");
   const [url, setUrl] = useState("");
+  const [commandText, setCommandText] = useState("");
+  const [envText, setEnvText] = useState("");
   const [headersText, setHeadersText] = useState("");
   const [timeoutSeconds, setTimeoutSeconds] = useState("10");
   const [serverEnabled, setServerEnabled] = useState(true);
@@ -48,6 +50,8 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
     setName("");
     setTransport("http");
     setUrl("");
+    setCommandText("");
+    setEnvText("");
     setHeadersText("");
     setTimeoutSeconds("10");
     setServerEnabled(true);
@@ -60,6 +64,8 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
     setName(server.name);
     setTransport(server.transport);
     setUrl(server.url);
+    setCommandText("");
+    setEnvText("");
     setHeadersText("");
     setTimeoutSeconds(String(server.timeout_seconds));
     setServerEnabled(server.enabled);
@@ -95,12 +101,56 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
     }
   }
 
+  function parseCommand(): string[] | null | "keep" | undefined {
+    const text = commandText.trim();
+    if (!text) {
+      return editing ? "keep" : null;
+    }
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (
+        !Array.isArray(parsed) ||
+        parsed.some((item) => typeof item !== "string") ||
+        parsed.length === 0
+      ) {
+        throw new Error("invalid");
+      }
+      return parsed as string[];
+    } catch {
+      setEditorError('Command must be a JSON array of strings, e.g. ["uvx", "mcp-server-git"]');
+      return undefined;
+    }
+  }
+
+  function parseEnv(): Record<string, string> | null | "keep" | undefined {
+    const text = envText.trim();
+    if (!text) {
+      return editing ? "keep" : null;
+    }
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed) ||
+        Object.values(parsed).some((value) => typeof value !== "string")
+      ) {
+        throw new Error("invalid");
+      }
+      return parsed as Record<string, string>;
+    } catch {
+      setEditorError('Environment must be a JSON object, e.g. {"API_KEY": "..."}');
+      return undefined;
+    }
+  }
+
   async function saveServer() {
     const trimmedName = name.trim();
     const trimmedUrl = url.trim();
     const timeout = Number.parseInt(timeoutSeconds, 10);
-    if (!trimmedName || !trimmedUrl) {
-      setEditorError("Name and URL are required.");
+    const isStdio = transport === "stdio";
+    if (!trimmedName || (!isStdio && !trimmedUrl)) {
+      setEditorError(isStdio ? "Name is required." : "Name and URL are required.");
       return;
     }
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 60) {
@@ -112,13 +162,23 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
     if (headers === undefined) {
       return;
     }
+    const command = parseCommand();
+    if (command === undefined) {
+      return;
+    }
+    const env = parseEnv();
+    if (env === undefined) {
+      return;
+    }
 
     const input: McpServerInput = {
       name: trimmedName,
       transport,
-      url: trimmedUrl,
+      url: isStdio ? "" : trimmedUrl,
       enabled: serverEnabled,
       timeout_seconds: timeout,
+      ...(command && command !== "keep" ? { command } : {}),
+      ...(env && env !== "keep" ? { env } : {}),
       ...(headers && headers !== "keep" ? { headers } : {}),
     };
 
@@ -132,7 +192,7 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
       closeEditor();
     } catch {
       setEditorError(
-        "Could not save the server. Check the URL, name uniqueness, and network reachability.",
+        "Could not save the server. Check the URL/command, name uniqueness, and network reachability.",
       );
     }
   }
@@ -209,8 +269,8 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
           <p className={styles.notice}>Loading MCP servers…</p>
         ) : servers.length === 0 ? (
           <p className={styles.notice}>
-            No MCP servers configured. Add a remote MCP endpoint to give agents access to tools such
-            as GitHub, Jira, or Lark.
+            No MCP servers configured. Add a remote MCP endpoint or a local stdio process to give
+            agents access to tools such as GitHub, Jira, or Lark.
           </p>
         ) : (
           <div className={styles.list}>
@@ -230,7 +290,12 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
                       </span>
                     ) : null}
                   </div>
-                  <span className={styles.url}>{server.url}</span>
+                  <span className={styles.url}>
+                    {server.transport === "stdio" ? (server.command ?? []).join(" ") : server.url}
+                  </span>
+                  {server.transport === "stdio" && server.env_names.length > 0 ? (
+                    <span className={styles.meta}>Env: {server.env_names.join(", ")} (masked)</span>
+                  ) : null}
                   {server.header_names.length > 0 ? (
                     <span className={styles.meta}>
                       Headers: {server.header_names.join(", ")} (masked)
@@ -301,40 +366,76 @@ export function McpServersPanel({ enabled }: McpServersPanelProps) {
             <Select
               label="Transport"
               value={transport}
-              onChange={(next) => setTransport(next as "http" | "sse")}
+              onChange={(next) => setTransport(next as "http" | "sse" | "stdio")}
               options={[
                 { value: "http", label: "Streamable HTTP" },
                 { value: "sse", label: "HTTP + SSE (legacy)" },
+                { value: "stdio", label: "Local process (stdio)" },
               ]}
             />
           </div>
 
-          <label className={styles.field}>
-            <span>URL</span>
-            <input
-              className={styles.input}
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://api.githubcopilot.com/mcp/"
-              maxLength={1000}
-            />
-          </label>
+          {transport === "stdio" ? (
+            <>
+              <label className={styles.field}>
+                <span>
+                  Command {editing?.command ? "(leave blank to keep existing)" : "(JSON array)"}
+                </span>
+                <input
+                  className={styles.input}
+                  value={commandText}
+                  onChange={(event) => setCommandText(event.target.value)}
+                  placeholder='["uvx", "mcp-server-git", "--repository", "/home/coder/workspace"]'
+                  maxLength={2000}
+                />
+              </label>
 
-          <label className={styles.field}>
-            <span>
-              Headers{" "}
-              {editing && editing.header_names.length > 0
-                ? "(leave blank to keep existing)"
-                : "(JSON object)"}
-            </span>
-            <textarea
-              className={styles.input}
-              value={headersText}
-              onChange={(event) => setHeadersText(event.target.value)}
-              placeholder={'{"Authorization": "Bearer ..."}'}
-              rows={3}
-            />
-          </label>
+              <label className={styles.field}>
+                <span>
+                  Environment{" "}
+                  {editing && editing.env_names.length > 0
+                    ? "(leave blank to keep existing)"
+                    : "(JSON object)"}
+                </span>
+                <textarea
+                  className={styles.input}
+                  value={envText}
+                  onChange={(event) => setEnvText(event.target.value)}
+                  placeholder={'{"API_KEY": "..."}'}
+                  rows={3}
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className={styles.field}>
+                <span>URL</span>
+                <input
+                  className={styles.input}
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="https://api.githubcopilot.com/mcp/"
+                  maxLength={1000}
+                />
+              </label>
+
+              <label className={styles.field}>
+                <span>
+                  Headers{" "}
+                  {editing && editing.header_names.length > 0
+                    ? "(leave blank to keep existing)"
+                    : "(JSON object)"}
+                </span>
+                <textarea
+                  className={styles.input}
+                  value={headersText}
+                  onChange={(event) => setHeadersText(event.target.value)}
+                  placeholder={'{"Authorization": "Bearer ..."}'}
+                  rows={3}
+                />
+              </label>
+            </>
+          )}
 
           <label className={styles.field}>
             <span>Timeout (seconds)</span>
