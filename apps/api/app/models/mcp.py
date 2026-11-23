@@ -9,18 +9,21 @@ from pydantic import BaseModel, Field
 
 
 class McpTransport(StrEnum):
-    """Supported remote MCP transports."""
+    """Supported MCP transports."""
 
     HTTP = "http"
     SSE = "sse"
+    STDIO = "stdio"
 
 
 class McpServerCreate(BaseModel):
-    """Register a remote MCP server."""
+    """Register an MCP server."""
 
     name: str = Field(..., min_length=1, max_length=120)
     transport: McpTransport = McpTransport.HTTP
-    url: str = Field(..., min_length=1, max_length=1000)
+    url: str = Field(default="", max_length=1000)
+    command: list[str] | None = None
+    env: dict[str, str] | None = None
     headers: dict[str, str] | None = None
     enabled: bool = True
     timeout_seconds: int = Field(default=10, ge=1, le=60)
@@ -32,7 +35,9 @@ class McpServerUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=120)
     transport: McpTransport | None = None
-    url: str | None = Field(default=None, min_length=1, max_length=1000)
+    url: str | None = Field(default=None, max_length=1000)
+    command: list[str] | None = None
+    env: dict[str, str] | None = None
     headers: dict[str, str] | None = None
     enabled: bool | None = None
     timeout_seconds: int | None = Field(default=None, ge=1, le=60)
@@ -54,7 +59,9 @@ class McpServerResponse(BaseModel):
     name: str
     transport: str
     url: str
-    header_names: list[str]
+    command: list[str] | None = None
+    env_names: list[str] = Field(default_factory=list)
+    header_names: list[str] = Field(default_factory=list)
     enabled: bool
     timeout_seconds: int
     disabled_tools: list[str]

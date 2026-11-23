@@ -31,6 +31,8 @@ def _response(server: McpServer) -> McpServerResponse:
         name=server.name,
         transport=server.transport,
         url=server.url,
+        command=mcp_service.command_argv(server),
+        env_names=mcp_service.env_names(server),
         header_names=mcp_service.header_names(server),
         enabled=server.enabled,
         timeout_seconds=server.timeout_seconds,

@@ -39,6 +39,7 @@ class SettingSpec:
 SETTINGS: dict[str, SettingSpec] = {
     "features.qdrant": SettingSpec("features.qdrant", SettingType.BOOL, False),
     "features.redis": SettingSpec("features.redis", SettingType.BOOL, False),
+    "features.mcp_stdio": SettingSpec("features.mcp_stdio", SettingType.BOOL, False),
     "features.terminal": SettingSpec("features.terminal", SettingType.BOOL, False),
     "features.code_server": SettingSpec(
         "features.code_server", SettingType.BOOL, False

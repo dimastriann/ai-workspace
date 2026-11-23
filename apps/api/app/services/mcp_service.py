@@ -13,6 +13,11 @@ from urllib.parse import urlparse
 
 from mcp import ClientSession, types
 from mcp.client.sse import sse_client
+from mcp.client.stdio import (
+    StdioServerParameters,
+    get_default_environment,
+    stdio_client,
+)
 from mcp.client.streamable_http import (
     create_mcp_http_client,
     streamable_http_client,
@@ -51,6 +56,8 @@ class McpConfig:
     name: str
     transport: str
     url: str
+    command: list[str] | None
+    env: dict[str, str]
     headers: dict[str, str]
     timeout_seconds: int
     disabled_tools: set[str]
@@ -83,14 +90,17 @@ class McpService:
         name = " ".join(data.name.split())
         if not name:
             raise McpValidationError("Server name is required")
-        await self._validate_url(data.url, data.transport)
+        await self._validate_target(db, data.transport, data.url, data.command)
         if await self._name_exists(name, db):
             raise McpValidationError("An MCP server with this name already exists")
 
+        is_stdio = data.transport == McpTransport.STDIO
         server = McpServer(
             name=name,
             transport=data.transport.value,
-            url=data.url,
+            url="" if is_stdio else data.url,
+            command=self._encode_command(data.command) if is_stdio else None,
+            env_encrypted=self._encrypt_env(data.env),
             headers_encrypted=self._encrypt_headers(data.headers),
             enabled=data.enabled,
             timeout_seconds=data.timeout_seconds,
@@ -121,10 +131,12 @@ class McpService:
 
         if data.transport is not None:
             server.transport = data.transport.value
-        if data.url is not None:
+        if "url" in fields and data.url is not None:
             server.url = data.url
-        if server.transport in {t.value for t in McpTransport}:
-            await self._validate_url(server.url, McpTransport(server.transport))
+        if "command" in fields:
+            server.command = self._encode_command(data.command)
+        if "env" in fields:
+            server.env_encrypted = self._encrypt_env(data.env)
         if "headers" in fields:
             server.headers_encrypted = self._encrypt_headers(data.headers)
         if data.enabled is not None:
@@ -133,6 +145,13 @@ class McpService:
             server.timeout_seconds = data.timeout_seconds
         if data.disabled_tools is not None:
             server.disabled_tools = json.dumps(sorted(set(data.disabled_tools)))
+
+        await self._validate_target(
+            db,
+            McpTransport(server.transport),
+            server.url,
+            self._decode_command(server.command) if server.command else None,
+        )
 
         await db.commit()
         await db.refresh(server)
@@ -150,6 +169,13 @@ class McpService:
         self, server_id: uuid.UUID, db: AsyncSession
     ) -> McpTestResponse:
         server = await self.get_server(server_id, db)
+        if server.transport == McpTransport.STDIO.value and not (
+            await settings_service.get("features.mcp_stdio", db)
+        ):
+            return McpTestResponse(
+                ok=False,
+                error="stdio transport is disabled; enable features.mcp_stdio",
+            )
         config = self._config(server)
         try:
             tools = await self.discover(config)
@@ -226,9 +252,12 @@ class McpService:
             .order_by(McpServer.name)
         )
         servers = list(result.scalars().all())
+        stdio_enabled = await settings_service.get("features.mcp_stdio", db)
         specs: list[ToolSpec] = []
 
         for server in servers:
+            if server.transport == McpTransport.STDIO.value and not stdio_enabled:
+                continue
             config = self._config(server)
             try:
                 tools = await self._cached_tools(config)
@@ -282,20 +311,77 @@ class McpService:
                 )
             except (ValueError, json.JSONDecodeError):
                 headers = {}
+        env: dict[str, str] = {}
+        if server.env_encrypted:
+            try:
+                env = json.loads(
+                    decrypt_secret(server.env_encrypted, app_settings.app_secret_key)
+                )
+            except (ValueError, json.JSONDecodeError):
+                env = {}
         return McpConfig(
             id=server.id,
             name=server.name,
             transport=server.transport,
             url=server.url,
+            command=McpService._decode_command(server.command),
+            env={str(key): str(value) for key, value in env.items()},
             headers={str(key): str(value) for key, value in headers.items()},
             timeout_seconds=server.timeout_seconds,
             disabled_tools=set(json.loads(server.disabled_tools or "[]")),
         )
 
     @staticmethod
+    def command_argv(server: McpServer) -> list[str] | None:
+        """Return the stdio command argv for a server, if applicable."""
+        if server.transport != McpTransport.STDIO.value:
+            return None
+        return McpService._decode_command(server.command)
+
+    @staticmethod
+    def env_names(server: McpServer) -> list[str]:
+        """Return the configured environment variable names, values masked."""
+        return sorted(McpService._config(server).env)
+
+    @staticmethod
     def header_names(server: McpServer) -> list[str]:
         config = McpService._config(server)
         return sorted(config.headers)
+
+    @staticmethod
+    def _encode_command(command: list[str] | None) -> str | None:
+        if not command:
+            return None
+        return json.dumps(list(command))
+
+    @staticmethod
+    def _decode_command(raw: str | None) -> list[str] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, list):
+            return None
+        return [str(item) for item in parsed]
+
+    @staticmethod
+    def _validate_command(command: list[str] | None) -> None:
+        if not command or not command[0]:
+            raise McpValidationError("stdio servers require a command")
+        if len(command) > 20:
+            raise McpValidationError("stdio command may have at most 20 arguments")
+        for arg in command:
+            if not arg or "\x00" in arg or len(arg) > 1000:
+                raise McpValidationError("stdio command arguments are invalid")
+
+    @staticmethod
+    def _encrypt_env(env: dict[str, str] | None) -> str | None:
+        if not env:
+            return None
+        payload = json.dumps({str(key): str(value) for key, value in env.items()})
+        return encrypt_secret(payload, app_settings.app_secret_key)
 
     @staticmethod
     def _encrypt_headers(headers: dict[str, str] | None) -> str | None:
@@ -315,6 +401,23 @@ class McpService:
         if exclude_id is not None:
             statement = statement.where(McpServer.id != exclude_id)
         return (await db.execute(statement)).first() is not None
+
+    @staticmethod
+    async def _validate_target(
+        db: AsyncSession,
+        transport: McpTransport,
+        url: str,
+        command: list[str] | None,
+    ) -> None:
+        """Validate the connection target for the configured transport."""
+        if transport == McpTransport.STDIO:
+            if not await settings_service.get("features.mcp_stdio", db):
+                raise McpValidationError(
+                    "stdio transport is disabled; enable features.mcp_stdio"
+                )
+            McpService._validate_command(command)
+        else:
+            await McpService._validate_url(url, transport)
 
     @staticmethod
     async def _validate_url(url: str, transport: McpTransport) -> None:
@@ -349,7 +452,23 @@ class McpService:
 
         @asynccontextmanager
         async def open_session():
-            if config.transport == McpTransport.SSE.value:
+            if config.transport == McpTransport.STDIO.value:
+                if not config.command:
+                    raise McpValidationError("stdio server has no command")
+                params = StdioServerParameters(
+                    command=config.command[0],
+                    args=config.command[1:],
+                    env={**get_default_environment(), **config.env},
+                )
+                async with stdio_client(params) as (read_stream, write_stream):
+                    async with ClientSession(
+                        read_stream,
+                        write_stream,
+                        read_timeout_seconds=config.timeout_seconds,
+                    ) as session:
+                        await session.initialize()
+                        yield session
+            elif config.transport == McpTransport.SSE.value:
                 async with sse_client(
                     config.url,
                     headers=config.headers,

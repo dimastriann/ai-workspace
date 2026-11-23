@@ -426,6 +426,10 @@ class McpServer(Base):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     transport: Mapped[str] = mapped_column(String(10), nullable=False, default="http")
     url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    # stdio transport: local command argv (JSON list) and environment variables
+    # (encrypted JSON object). Unused for remote transports.
+    command: Mapped[str | None] = mapped_column(Text)
+    env_encrypted: Mapped[str | None] = mapped_column(Text)
     headers_encrypted: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
     timeout_seconds: Mapped[int] = mapped_column(default=10, nullable=False)
