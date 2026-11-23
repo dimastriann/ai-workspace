@@ -62,6 +62,7 @@ class McpServerResponse(BaseModel):
     command: list[str] | None = None
     env_names: list[str] = Field(default_factory=list)
     header_names: list[str] = Field(default_factory=list)
+    oauth_connected: bool = False
     enabled: bool
     timeout_seconds: int
     disabled_tools: list[str]
@@ -70,6 +71,18 @@ class McpServerResponse(BaseModel):
     last_checked_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class McpOAuthStartRequest(BaseModel):
+    """Start the OAuth browser flow for a server."""
+
+    redirect_uri: str = Field(..., min_length=1, max_length=1000)
+
+
+class McpOAuthStartResponse(BaseModel):
+    """The authorization URL the browser must open."""
+
+    authorize_url: str
 
 
 class McpTestResponse(BaseModel):

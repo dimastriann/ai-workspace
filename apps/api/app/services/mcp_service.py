@@ -39,6 +39,7 @@ from app.models.mcp import (
     McpToolInfo,
     McpTransport,
 )
+from app.services.mcp_oauth_service import mcp_oauth_service
 from app.services.settings_service import settings_service
 from app.services.tools import ToolSpec
 
@@ -176,6 +177,7 @@ class McpService:
                 ok=False,
                 error="stdio transport is disabled; enable features.mcp_stdio",
             )
+        await self._ensure_fresh_oauth(server, db)
         config = self._config(server)
         try:
             tools = await self.discover(config)
@@ -258,6 +260,7 @@ class McpService:
         for server in servers:
             if server.transport == McpTransport.STDIO.value and not stdio_enabled:
                 continue
+            await self._ensure_fresh_oauth(server, db)
             config = self._config(server)
             try:
                 tools = await self._cached_tools(config)
@@ -300,6 +303,15 @@ class McpService:
         return handler
 
     @staticmethod
+    async def _ensure_fresh_oauth(server: McpServer, db: AsyncSession) -> None:
+        """Refresh OAuth tokens proactively when they are about to expire."""
+        bundle = mcp_oauth_service.load_bundle(server)
+        if bundle is None or not mcp_oauth_service.bundle_expired(bundle):
+            return
+        if await mcp_oauth_service.refresh(server, bundle):
+            await db.commit()
+
+    @staticmethod
     def _config(server: McpServer) -> McpConfig:
         headers: dict[str, str] = {}
         if server.headers_encrypted:
@@ -319,6 +331,10 @@ class McpService:
                 )
             except (ValueError, json.JSONDecodeError):
                 env = {}
+        headers = {str(key): str(value) for key, value in headers.items()}
+        bundle = mcp_oauth_service.load_bundle(server)
+        if bundle and "Authorization" not in headers:
+            headers["Authorization"] = f"Bearer {bundle['access_token']}"
         return McpConfig(
             id=server.id,
             name=server.name,

@@ -430,6 +430,8 @@ class McpServer(Base):
     # (encrypted JSON object). Unused for remote transports.
     command: Mapped[str | None] = mapped_column(Text)
     env_encrypted: Mapped[str | None] = mapped_column(Text)
+    # OAuth token bundle (encrypted JSON object) for remote transports.
+    oauth_encrypted: Mapped[str | None] = mapped_column(Text)
     headers_encrypted: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
     timeout_seconds: Mapped[int] = mapped_column(default=10, nullable=False)

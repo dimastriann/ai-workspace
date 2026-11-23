@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -10,6 +11,8 @@ from app.core.errors import McpServerNotFoundError, McpValidationError
 from app.dependencies import require_admin, require_member, require_same_origin
 from app.models.database import McpServer, User
 from app.models.mcp import (
+    McpOAuthStartRequest,
+    McpOAuthStartResponse,
     McpServerCreate,
     McpServerResponse,
     McpServerUpdate,
@@ -19,6 +22,7 @@ from app.models.mcp import (
     McpTestResponse,
 )
 from app.services.audit_service import audit_service
+from app.services.mcp_oauth_service import McpOAuthError, mcp_oauth_service
 from app.services.mcp_service import mcp_service
 from app.services.settings_service import settings_service
 
@@ -34,6 +38,7 @@ def _response(server: McpServer) -> McpServerResponse:
         command=mcp_service.command_argv(server),
         env_names=mcp_service.env_names(server),
         header_names=mcp_service.header_names(server),
+        oauth_connected=mcp_oauth_service.load_bundle(server) is not None,
         enabled=server.enabled,
         timeout_seconds=server.timeout_seconds,
         disabled_tools=sorted(set(_json_list(server.disabled_tools))),
@@ -271,3 +276,109 @@ async def list_tools(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
+
+
+@router.post("/servers/{server_id}/oauth/start", response_model=McpOAuthStartResponse)
+async def start_oauth(
+    server_id: UUID,
+    data: McpOAuthStartRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(require_admin),
+    _: None = Depends(require_same_origin),
+) -> McpOAuthStartResponse:
+    """Begin the OAuth browser flow: discover, register, build authorize URL."""
+    try:
+        server = await mcp_service.get_server(server_id, db)
+        if server.transport not in {"http", "sse"}:
+            raise McpValidationError("OAuth applies to remote transports only")
+        authorize_url = await mcp_oauth_service.start_authorization(
+            server, data.redirect_uri
+        )
+    except McpServerNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except (McpValidationError, McpOAuthError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    await audit_service.record(
+        db,
+        action="mcp.oauth_start",
+        actor_id=admin.id,
+        target=str(server.id),
+        details={"name": server.name},
+        ip=request.client.host if request.client else None,
+    )
+    return McpOAuthStartResponse(authorize_url=authorize_url)
+
+
+@router.get("/oauth/callback", response_class=HTMLResponse)
+async def oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db_session),
+) -> HTMLResponse:
+    """OAuth redirect target: exchange the code and close the popup."""
+    if error:
+        return _callback_page(f"Authorization failed: {error}")
+    pending = mcp_oauth_service.get_pending(state) if state else None
+    if pending is None or not code:
+        return _callback_page("Unknown or expired OAuth state.")
+
+    try:
+        server = await mcp_service.get_server(UUID(pending.server_id), db)
+        await mcp_oauth_service.complete_authorization(server, pending, code)
+        await db.commit()
+        await audit_service.record(
+            db,
+            action="mcp.oauth_connect",
+            target=str(server.id),
+            details={"name": server.name},
+        )
+    except (McpOAuthError, McpServerNotFoundError) as exc:
+        return _callback_page(f"Authorization failed: {exc}")
+    return _callback_page(
+        f"Connected <strong>{server.name}</strong>. You can close this window."
+    )
+
+
+def _callback_page(message: str) -> HTMLResponse:
+    safe = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return HTMLResponse(
+        "<!doctype html><meta charset='utf-8'>"
+        "<title>AI Workspace MCP</title>"
+        f"<p>{safe}</p><script>window.close()</script>"
+    )
+
+
+@router.delete("/servers/{server_id}/oauth", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_oauth(
+    server_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(require_admin),
+    _: None = Depends(require_same_origin),
+):
+    """Remove stored OAuth tokens for a server."""
+    try:
+        server = await mcp_service.get_server(server_id, db)
+    except McpServerNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    mcp_oauth_service.disconnect(server)
+    await db.commit()
+    await audit_service.record(
+        db,
+        action="mcp.oauth_disconnect",
+        actor_id=admin.id,
+        target=str(server.id),
+        details={"name": server.name},
+        ip=request.client.host if request.client else None,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
