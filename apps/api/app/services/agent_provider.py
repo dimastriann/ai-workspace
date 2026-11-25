@@ -47,7 +47,9 @@ class OpenAIProvider:
         kwargs: dict[str, Any] = {
             "api_key": settings.openai_api_key or "missing",
         }
-        if settings.llm_provider == "gemini":
+        if settings.openai_base_url:
+            kwargs["base_url"] = settings.openai_base_url
+        elif settings.llm_provider == "gemini":
             kwargs["base_url"] = self.GEMINI_BASE_URL
         elif settings.llm_provider == "ollama":
             kwargs["base_url"] = f"{settings.ollama_base_url.rstrip('/')}/v1"

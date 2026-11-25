@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     llm_provider: str = "openai"  # "openai", "gemini", or "ollama"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+    # Optional base URL for any OpenAI-compatible gateway (OpenRouter, Groq,
+    # DeepSeek, vLLM, LM Studio, ...). Used with llm_provider="openai".
+    openai_base_url: str = ""
     ollama_base_url: str = "http://localhost:11434"
 
     # ── Database ─────────────────────────────────────────────────────────

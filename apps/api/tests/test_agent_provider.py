@@ -35,3 +35,12 @@ async def test_ollama_provider_appends_v1(monkeypatch) -> None:
     provider = OpenAIProvider()
 
     assert str(provider._client.base_url).rstrip("/") == "http://ollama:11434/v1"
+
+
+async def test_base_url_override_targets_any_gateway(monkeypatch) -> None:
+    monkeypatch.setattr(app_settings, "llm_provider", "openai")
+    monkeypatch.setattr(app_settings, "openai_base_url", "https://openrouter.ai/api/v1")
+
+    provider = OpenAIProvider()
+
+    assert str(provider._client.base_url).rstrip("/") == "https://openrouter.ai/api/v1"
