@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     # ── LLM Provider ────────────────────────────────────────────────────
-    llm_provider: str = "openai"  # "openai" or "ollama"
+    llm_provider: str = "openai"  # "openai", "gemini", or "ollama"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     ollama_base_url: str = "http://localhost:11434"

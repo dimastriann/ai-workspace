@@ -41,11 +41,15 @@ class AgentProvider(Protocol):
 class OpenAIProvider:
     """Stream chat completions and tool calls from an OpenAI-compatible API."""
 
+    GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
     def __init__(self, model: str | None = None) -> None:
         kwargs: dict[str, Any] = {
             "api_key": settings.openai_api_key or "missing",
         }
-        if settings.llm_provider == "ollama":
+        if settings.llm_provider == "gemini":
+            kwargs["base_url"] = self.GEMINI_BASE_URL
+        elif settings.llm_provider == "ollama":
             kwargs["base_url"] = f"{settings.ollama_base_url.rstrip('/')}/v1"
             kwargs["api_key"] = settings.openai_api_key or "ollama"
 
