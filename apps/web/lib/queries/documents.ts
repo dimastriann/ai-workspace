@@ -50,7 +50,11 @@ export function useUploadDocument(workspaceId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { file: File; folderId?: string | null }) => {
+    mutationFn: async (input: {
+      file: File;
+      folderId?: string | null;
+      projectId?: string | null;
+    }) => {
       if (!workspaceId) {
         throw new Error("No workspace selected");
       }
@@ -59,6 +63,9 @@ export function useUploadDocument(workspaceId: string | null) {
       formData.append("file", input.file);
       if (input.folderId) {
         formData.append("folder_id", input.folderId);
+      }
+      if (input.projectId) {
+        formData.append("project_id", input.projectId);
       }
 
       const response = await fetch(`/api/documents/upload/${workspaceId}`, {

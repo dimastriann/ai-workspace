@@ -18,6 +18,7 @@ import {
   useFolders,
   useUpdateFolder,
 } from "@/lib/queries/folders";
+import { useProjects } from "@/lib/queries/projects";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 import type { ConversionFormat, DocumentRecord, FolderTree } from "@/lib/types";
 
@@ -121,7 +122,9 @@ export default function DocumentsPage() {
   const [pendingUpload, setPendingUpload] = useState<File | null>(null);
   const [uploadFormat, setUploadFormat] = useState<"none" | ConversionFormat>("none");
   const [uploadIncludeImages, setUploadIncludeImages] = useState(false);
+  const [uploadProjectId, setUploadProjectId] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { data: uploadProjects = [] } = useProjects(workspaceId);
   const conversionQuery = useConversion(pendingConversion?.id ?? null, Boolean(pendingConversion));
   const latestConversion = conversionQuery.data;
 
@@ -149,6 +152,7 @@ export default function DocumentsPage() {
     setPendingUpload(file);
     setUploadFormat("none");
     setUploadIncludeImages(false);
+    setUploadProjectId("");
     setUploadError(null);
   }
 
@@ -166,6 +170,7 @@ export default function DocumentsPage() {
       const result = await upload.mutateAsync({
         file: pendingUpload,
         folderId: selectedFolderId,
+        projectId: uploadProjectId || null,
       });
 
       if (uploadFormat !== "none") {
@@ -648,8 +653,24 @@ export default function DocumentsPage() {
       >
         <p>
           <strong>{pendingUpload?.name}</strong>
-          {pendingUpload ? ` · ${formatSize(pendingUpload.size)}` : null}
+          {pendingUpload ? ` A ${formatSize(pendingUpload.size)}` : null}
         </p>
+
+        <div className={styles.field}>
+          <span>Project (optional)</span>
+          <Select
+            label="Project"
+            value={uploadProjectId}
+            onChange={setUploadProjectId}
+            options={[
+              { value: "", label: "Workspace (no project)" },
+              ...uploadProjects.map((project) => ({
+                value: project.id,
+                label: project.name,
+              })),
+            ]}
+          />
+        </div>
 
         <div className={styles.field}>
           <span>After upload</span>
