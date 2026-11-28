@@ -31,6 +31,7 @@ class DocumentMetadata(BaseModel):
     status: str = "processing"
     workspace_id: str
     folder_id: str | None = None
+    project_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

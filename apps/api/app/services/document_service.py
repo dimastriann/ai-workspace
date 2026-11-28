@@ -18,10 +18,12 @@ from app.core.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
     FolderNotFoundError,
+    ProjectNotFoundError,
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
 )
 from app.models.database import (
+    ChatProject,
     Document,
     DocumentChunk,
     DocumentConversion,
@@ -46,6 +48,7 @@ class DocumentService:
         file: UploadFile,
         db: AsyncSession,
         folder_id: uuid.UUID | None = None,
+        project_id: uuid.UUID | None = None,
     ) -> Document:
         """Validate, store, register, and enqueue a document."""
         if await db.get(Workspace, workspace_id) is None:
@@ -54,6 +57,10 @@ class DocumentService:
             folder = await db.get(DocumentFolder, folder_id)
             if folder is None or folder.workspace_id != workspace_id:
                 raise FolderNotFoundError("Folder not found")
+        if project_id is not None:
+            project = await db.get(ChatProject, project_id)
+            if project is None or project.workspace_id != workspace_id:
+                raise ProjectNotFoundError("Project not found")
 
         filename = Path(file.filename or "unnamed").name
         suffix = Path(filename).suffix.lower().lstrip(".")
@@ -78,6 +85,7 @@ class DocumentService:
             id=document_id,
             workspace_id=workspace_id,
             folder_id=folder_id,
+            project_id=project_id,
             filename=filename,
             document_type=detect_document_type(filename),
             size_bytes=len(data),

@@ -77,3 +77,37 @@ async def test_project_crud(
     await db_session.refresh(document)
     assert session.project_id is None
     assert document.project_id is None
+
+
+@pytest.mark.asyncio
+async def test_upload_document_into_project(
+    member_client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr("app.services.storage.UPLOADS_ROOT", tmp_path)
+    workspace = await _make_workspace(db_session)
+
+    created = await member_client.post(
+        "/api/projects",
+        json={"workspace_id": str(workspace.id), "name": "Docs"},
+    )
+    assert created.status_code == 201, created.text
+    project_id = created.json()["id"]
+
+    uploaded = await member_client.post(
+        f"/api/documents/upload/{workspace.id}",
+        files={"file": ("spec.md", b"# spec", "text/markdown")},
+        data={"project_id": project_id},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+
+    listed = await member_client.get(f"/api/documents/{workspace.id}")
+    body = listed.json()
+    target = next(item for item in body if item["filename"] == "spec.md")
+    assert target["project_id"] == project_id
+
+    wrong_project = await member_client.post(
+        f"/api/documents/upload/{workspace.id}",
+        files={"file": ("bad.md", b"x", "text/markdown")},
+        data={"project_id": str(uuid.uuid4())},
+    )
+    assert wrong_project.status_code == 404

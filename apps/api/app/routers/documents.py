@@ -32,6 +32,7 @@ from app.core.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
     FolderNotFoundError,
+    ProjectNotFoundError,
     UnsupportedFileTypeError,
     WorkspaceNotFoundError,
 )
@@ -80,6 +81,7 @@ def _document_metadata(document: Document) -> DocumentMetadata:
         status=document.status,
         workspace_id=str(document.workspace_id),
         folder_id=str(document.folder_id) if document.folder_id else None,
+        project_id=str(document.project_id) if document.project_id else None,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -142,6 +144,7 @@ async def upload_document(
     workspace_id: UUID,
     file: UploadFile = File(...),
     folder_id: UUID | None = Form(None),
+    project_id: UUID | None = Form(None),
     db: AsyncSession = Depends(get_db_session),
     _user: User = Depends(require_member),
 ):
@@ -151,7 +154,7 @@ async def upload_document(
     """
     try:
         db_doc = await document_service.upload_document(
-            workspace_id, file, db, folder_id
+            workspace_id, file, db, folder_id, project_id
         )
         return DocumentUploadResponse(
             document_id=str(db_doc.id),
@@ -173,6 +176,10 @@ async def upload_document(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
     except FolderNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except ProjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
