@@ -48,6 +48,48 @@ class Workspace(Base):
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
         "ChatSession", back_populates="workspace"
     )
+    projects: Mapped[list["ChatProject"]] = relationship(
+        "ChatProject", back_populates="workspace", cascade="all, delete-orphan"
+    )
+
+
+class ChatProject(Base):
+    """
+    A project groups chat sessions inside a workspace with its own
+    instructions and memory scope.
+    """
+
+    __tablename__ = "chat_projects"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_chat_projects_scope_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, default="")
+    instructions: Mapped[str | None] = mapped_column(Text, default="")
+    # "workspace" blends the whole workspace memory; "project" restricts
+    # retrieval to documents linked to this project.
+    memory_mode: Mapped[str] = mapped_column(String(20), default="workspace")
+
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship(
+        "Workspace", back_populates="projects"
+    )
+    sessions: Mapped[list["ChatSession"]] = relationship(
+        "ChatSession", back_populates="project"
+    )
 
 
 class DocumentFolder(Base):
@@ -96,6 +138,11 @@ class Document(Base):
         nullable=True,
         index=True,
     )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     document_type: Mapped[str] = mapped_column(
@@ -134,6 +181,11 @@ class ChatSession(Base):
 
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
     model: Mapped[str | None] = mapped_column(String(120))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     active_leaf_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("chat_messages.id", use_alter=True, ondelete="SET NULL"),
         nullable=True,
@@ -147,6 +199,9 @@ class ChatSession(Base):
     # Relationships
     workspace: Mapped[Optional["Workspace"]] = relationship(
         "Workspace", back_populates="chat_sessions"
+    )
+    project: Mapped[Optional["ChatProject"]] = relationship(
+        "ChatProject", back_populates="sessions"
     )
     messages: Mapped[list["ChatMessage"]] = relationship(
         "ChatMessage",

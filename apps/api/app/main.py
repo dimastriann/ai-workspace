@@ -24,6 +24,7 @@ from app.routers import (
     documents,
     folders,
     mcp,
+    projects,
     rag,
     skills,
     users,
@@ -109,6 +110,7 @@ app.include_router(documents.router, prefix="/api/documents", tags=["Documents"]
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
 app.include_router(mcp.router, prefix="/api/mcp", tags=["MCP"])
 app.include_router(workspaces.router, prefix="/api/workspaces", tags=["Workspaces"])
+app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 
 
 @app.get("/health", tags=["Health"])

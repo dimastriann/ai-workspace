@@ -248,6 +248,7 @@ async def test_regenerate_creates_branch(db_session: AsyncSession) -> None:
         title="Regenerate",
     )
     db_session.add(session)
+    await db_session.commit()
     question = ChatMessage(
         id=uuid.uuid4(),
         session_id=session.id,
@@ -263,6 +264,7 @@ async def test_regenerate_creates_branch(db_session: AsyncSession) -> None:
     )
     db_session.add(question)
     db_session.add(old_answer)
+    await db_session.commit()
     session.active_leaf_id = old_answer.id
     await db_session.commit()
 
@@ -309,6 +311,7 @@ async def test_edit_message_creates_branch(db_session: AsyncSession) -> None:
         title="Edit",
     )
     db_session.add(session)
+    await db_session.commit()
     original = ChatMessage(
         id=uuid.uuid4(),
         session_id=session.id,
@@ -324,6 +327,7 @@ async def test_edit_message_creates_branch(db_session: AsyncSession) -> None:
     )
     db_session.add(original)
     db_session.add(old_answer)
+    await db_session.commit()
     session.active_leaf_id = old_answer.id
     await db_session.commit()
 

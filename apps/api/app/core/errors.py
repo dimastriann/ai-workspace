@@ -45,6 +45,14 @@ class McpValidationError(Exception):
     """An MCP server configuration is invalid."""
 
 
+class ProjectNotFoundError(Exception):
+    """The requested chat project does not exist."""
+
+
+class ProjectValidationError(Exception):
+    """A chat project configuration is invalid."""
+
+
 class ChatSessionNotFoundError(Exception):
     """The requested chat session does not exist."""
 
