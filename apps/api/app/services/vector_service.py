@@ -51,10 +51,17 @@ class VectorService:
         document_id: UUID,
         chunks: list[tuple[UUID, str]],
         db: Any,
+        project_id: UUID | None = None,
     ) -> bool:
         """Embed and upsert document chunks. Returns whether it succeeded."""
         if not chunks or not await self.enabled(db):
             return False
+        payload: dict[str, str] = {
+            "workspace_id": str(workspace_id),
+            "document_id": str(document_id),
+        }
+        if project_id is not None:
+            payload["project_id"] = str(project_id)
         try:
             vectors = await self.embed([content for _, content in chunks])
             client = await self._qdrant_client()
@@ -69,10 +76,7 @@ class VectorService:
                     {
                         "id": str(chunk_id),
                         "vector": vector,
-                        "payload": {
-                            "workspace_id": str(workspace_id),
-                            "document_id": str(document_id),
-                        },
+                        "payload": payload,
                     }
                     for (chunk_id, _), vector in zip(chunks, vectors, strict=True)
                 ],
@@ -93,23 +97,28 @@ class VectorService:
             pass
 
     async def search(
-        self, workspace_id: UUID, query: str, limit: int
+        self,
+        workspace_id: UUID,
+        query: str,
+        limit: int,
+        project_id: UUID | None = None,
     ) -> list[tuple[str, float]] | None:
         """Return (chunk_id, score) hits, or None when unavailable."""
+        must: list[dict[str, Any]] = [
+            {
+                "key": "workspace_id",
+                "match": {"value": str(workspace_id)},
+            }
+        ]
+        if project_id is not None:
+            must.append({"key": "project_id", "match": {"value": str(project_id)}})
         try:
             vectors = await self.embed([query])
             client = await self._qdrant_client()
             response = await client.query_points(
                 COLLECTION,
                 query=vectors[0],
-                query_filter={
-                    "must": [
-                        {
-                            "key": "workspace_id",
-                            "match": {"value": str(workspace_id)},
-                        }
-                    ]
-                },
+                query_filter={"must": must},
                 limit=limit,
                 with_payload=False,
             )

@@ -28,7 +28,7 @@ from app.core.errors import (
     FileTooLargeError,
     UnsupportedFileTypeError,
 )
-from app.models.database import ChatAttachment, ChatMessage, ChatSession
+from app.models.database import ChatAttachment, ChatMessage, ChatProject, ChatSession
 from app.services.agent_provider import AgentProvider, ToolCall, get_provider
 from app.services.agent_service import DEFAULT_PERMISSIONS
 from app.services.audit_service import audit_service
@@ -69,6 +69,7 @@ class ChatService:
         db: AsyncSession,
         user_id: UUID | None = None,
         model: str | None = None,
+        project_id: UUID | None = None,
     ) -> ChatSession:
         """Fetch an existing owned session or create a new one."""
         if session_id:
@@ -93,6 +94,7 @@ class ChatService:
             workspace_id=workspace_id,
             user_id=user_id,
             model=model,
+            project_id=project_id,
             title="New Conversation",
         )
         db.add(new_session)
@@ -101,11 +103,23 @@ class ChatService:
         return new_session
 
     async def build_context(
-        self, query: str, workspace_id: UUID, db: AsyncSession
+        self,
+        query: str,
+        workspace_id: UUID,
+        db: AsyncSession,
+        *,
+        project_id: UUID | None = None,
+        project_only: bool = False,
     ) -> tuple[str, list[dict[str, object]]]:
         """Retrieve context plus a source list for the response."""
         try:
-            chunks = await retrieval_service.search(query, workspace_id, db)
+            chunks = await retrieval_service.search(
+                query,
+                workspace_id,
+                db,
+                project_id=project_id,
+                project_only=project_only,
+            )
         except Exception:
             return "", []
 
@@ -120,6 +134,26 @@ class ChatService:
             for chunk in chunks
         ]
         return context, sources
+
+    async def retrieval_scope(
+        self, session: ChatSession, db: AsyncSession
+    ) -> tuple[UUID | None, bool]:
+        """Resolve the retrieval scope from the session's project, if any."""
+        if session.project_id is None:
+            return None, False
+        project = await db.get(ChatProject, session.project_id)
+        if project is None:
+            return None, False
+        return session.project_id, project.memory_mode == "project"
+
+    async def project_instructions(self, session: ChatSession, db: AsyncSession) -> str:
+        """Custom instructions of the session's project, if any."""
+        if session.project_id is None:
+            return ""
+        project = await db.get(ChatProject, session.project_id)
+        if project is None:
+            return ""
+        return (project.instructions or "").strip()
 
     async def create_attachment(
         self, filename: str, data: bytes, user_id: UUID, db: AsyncSession
@@ -326,7 +360,14 @@ class ChatService:
         if context is None:
             context = ""
             if workspace_id:
-                context, _ = await self.build_context(message, workspace_id, db)
+                scope_project, scope_only = await self.retrieval_scope(session, db)
+                context, _ = await self.build_context(
+                    message,
+                    workspace_id,
+                    db,
+                    project_id=scope_project,
+                    project_only=scope_only,
+                )
 
         attachment_context = await self.attachment_context(
             attachment_ids or [], user_id, db
@@ -337,6 +378,9 @@ class ChatService:
             )
 
         system_msg = self._system_prompt(context)
+        instructions = await self.project_instructions(session, db)
+        if instructions:
+            system_msg = f"{system_msg}\n\nProject instructions:\n{instructions}"
         image_parts = await self.attachment_image_parts(
             attachment_ids or [], user_id, db
         )
@@ -399,11 +443,17 @@ class ChatService:
         if last_user is None:
             raise ChatValidationError("No user message to regenerate from")
 
-        context, _sources = (
-            await self.build_context(last_user.content, session.workspace_id, db)
-            if session.workspace_id
-            else ("", [])
-        )
+        context: str = ""
+        _sources: list[dict[str, object]] = []
+        if session.workspace_id:
+            scope_project, scope_only = await self.retrieval_scope(session, db)
+            context, _sources = await self.build_context(
+                last_user.content,
+                session.workspace_id,
+                db,
+                project_id=scope_project,
+                project_only=scope_only,
+            )
         attachment_context = await self.attachment_context(
             self._attachment_ids(last_user), user_id, db
         )
@@ -412,6 +462,9 @@ class ChatService:
                 f"{context}\n\n{attachment_context}" if context else attachment_context
             )
         system_msg = self._system_prompt(context)
+        instructions = await self.project_instructions(session, db)
+        if instructions:
+            system_msg = f"{system_msg}\n\nProject instructions:\n{instructions}"
         # history ends with the last user message; it is rebuilt below with
         # image parts so its text is not sent twice.
         prompt = [
@@ -489,11 +542,17 @@ class ChatService:
         session.updated_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
 
-        context, _sources = (
-            await self.build_context(new_content, session.workspace_id, db)
-            if session.workspace_id
-            else ("", [])
-        )
+        context: str = ""
+        _sources: list[dict[str, object]] = []
+        if session.workspace_id:
+            scope_project, scope_only = await self.retrieval_scope(session, db)
+            context, _sources = await self.build_context(
+                new_content,
+                session.workspace_id,
+                db,
+                project_id=scope_project,
+                project_only=scope_only,
+            )
         attachment_context = await self.attachment_context(
             self._attachment_ids(new_user), user_id, db
         )
@@ -501,8 +560,12 @@ class ChatService:
             context = (
                 f"{context}\n\n{attachment_context}" if context else attachment_context
             )
+        system_msg = self._system_prompt(context)
+        instructions = await self.project_instructions(session, db)
+        if instructions:
+            system_msg = f"{system_msg}\n\nProject instructions:\n{instructions}"
         prompt = [
-            {"role": "system", "content": self._system_prompt(context)},
+            {"role": "system", "content": system_msg},
             *self._history_from_messages(active[:target_index]),
         ]
         image_parts = await self.attachment_image_parts(

@@ -35,15 +35,21 @@ class RetrievalService:
         workspace_id: UUID,
         db: AsyncSession,
         limit: int = 5,
+        project_id: UUID | None = None,
+        project_only: bool = False,
     ) -> list[RetrievedChunk]:
         if not query.strip():
             return []
 
-        semantic = await self._semantic_search(query, workspace_id, db, limit)
+        semantic = await self._semantic_search(
+            query, workspace_id, db, limit, project_id, project_only
+        )
         if semantic is not None:
             return semantic
 
-        return await self._lexical_search(query, workspace_id, db, limit)
+        return await self._lexical_search(
+            query, workspace_id, db, limit, project_id, project_only
+        )
 
     async def _semantic_search(
         self,
@@ -51,11 +57,18 @@ class RetrievalService:
         workspace_id: UUID,
         db: AsyncSession,
         limit: int,
+        project_id: UUID | None,
+        project_only: bool,
     ) -> list[RetrievedChunk] | None:
         """Vector search; None means fall back to lexical."""
         if not await vector_service.enabled(db):
             return None
-        hits = await vector_service.search(workspace_id, query, limit)
+        hits = await vector_service.search(
+            workspace_id,
+            query,
+            limit,
+            project_id=project_id if project_only else None,
+        )
         if hits is None:
             return None
         if not hits:
@@ -91,6 +104,8 @@ class RetrievalService:
         workspace_id: UUID,
         db: AsyncSession,
         limit: int,
+        project_id: UUID | None = None,
+        project_only: bool = False,
     ) -> list[RetrievedChunk]:
         columns = (
             DocumentChunk.document_id,
@@ -120,6 +135,8 @@ class RetrievalService:
                 .order_by(DocumentChunk.ordinal)
                 .limit(limit)
             )
+        if project_only and project_id is not None:
+            statement = statement.where(Document.project_id == project_id)
 
         rows = (await db.execute(statement)).all()
         return [

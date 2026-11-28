@@ -19,6 +19,9 @@ class ChatMessageRequest(BaseModel):
     workspace_id: str | None = Field(
         None, description="Workspace context for the conversation"
     )
+    project_id: str | None = Field(
+        None, description="Chat project for the conversation"
+    )
     disabled_mcp_tools: list[str] = Field(
         default_factory=list,
         max_length=200,
@@ -43,6 +46,7 @@ class ChatSession(BaseModel):
     id: str
     title: str
     workspace_id: str | None = None
+    project_id: str | None = None
     message_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -66,6 +70,7 @@ class ChatSessionSummary(BaseModel):
     id: str
     title: str
     workspace_id: str | None = None
+    project_id: str | None = None
     message_count: int = 0
     model: str | None = None
     created_at: datetime

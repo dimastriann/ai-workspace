@@ -66,4 +66,5 @@ async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
         document_id,
         [(row.id, row.content) for row in rows],
         db,
+        project_id=document.project_id,
     )

@@ -54,6 +54,7 @@ def _session_summary(session: ChatSession, message_count: int) -> ChatSessionSum
         id=str(session.id),
         title=session.title,
         workspace_id=str(session.workspace_id) if session.workspace_id else None,
+        project_id=str(session.project_id) if session.project_id else None,
         message_count=message_count,
         model=session.model,
         created_at=session.created_at,
@@ -419,6 +420,7 @@ async def chat_stream(
     # 1. Resolve Session
     session_id_uuid = UUID(request.session_id) if request.session_id else None
     workspace_id_uuid = UUID(request.workspace_id) if request.workspace_id else None
+    project_id_uuid = UUID(request.project_id) if request.project_id else None
 
     session = await chat_service.get_or_create_session(
         session_id_uuid,
@@ -426,6 +428,7 @@ async def chat_stream(
         db,
         user_id=_user.id,
         model=request.model,
+        project_id=project_id_uuid,
     )
 
     context = ""

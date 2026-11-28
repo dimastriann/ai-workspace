@@ -32,9 +32,13 @@ def upgrade() -> None:
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("instructions", sa.Text(), nullable=True),
-        sa.Column("memory_mode", sa.String(20), nullable=False, server_default="workspace"),
+        sa.Column(
+            "memory_mode", sa.String(20), nullable=False, server_default="workspace"
+        ),
         sa.Column("created_by", sa.Uuid(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column(
             "updated_at",
             sa.DateTime(),
