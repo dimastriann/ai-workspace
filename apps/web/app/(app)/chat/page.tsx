@@ -24,6 +24,7 @@ import {
   useUploadChatAttachment,
 } from "@/lib/queries/chat-sessions";
 import { useMcpStatus } from "@/lib/queries/mcp";
+import { useCreateProject, useProjects } from "@/lib/queries/projects";
 import { useWorkspaces } from "@/lib/queries/workspaces";
 import { useWorkspaceStore } from "@/lib/stores/workspace";
 import type { ChatAttachment, ChatSessionSummary, McpStatusServer, Source } from "@/lib/types";
@@ -67,10 +68,72 @@ function SourceList({ sources }: { sources?: Source[] }) {
   );
 }
 
+interface SessionRowProps {
+  session: ChatSessionSummary;
+  active: boolean;
+  onOpen: (id: string) => void;
+  onRename: (session: ChatSessionSummary) => void;
+  onDelete: (session: ChatSessionSummary) => void;
+}
+
+function SessionRow({ session, active, onOpen, onRename, onDelete }: SessionRowProps) {
+  return (
+    <div className={`${styles.sessionRow} ${active ? styles.sessionActive : ""}`}>
+      <button type="button" className={styles.sessionSelect} onClick={() => onOpen(session.id)}>
+        <span className={styles.sessionTitle}>{session.title}</span>
+        <span className={styles.sessionMeta}>{session.message_count} messages</span>
+      </button>
+      <span className={styles.sessionActions}>
+        <button
+          type="button"
+          className={styles.sessionAction}
+          aria-label={`Rename ${session.title}`}
+          onClick={() => onRename(session)}
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={styles.sessionAction}
+          aria-label={`Delete ${session.title}`}
+          onClick={() => onDelete(session)}
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
+          </svg>
+        </button>
+      </span>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const currentProjectId = useWorkspaceStore((state) => state.currentProjectId);
+  const setProject = useWorkspaceStore((state) => state.setProject);
   const queryClient = useQueryClient();
   const { data: workspaces = [] } = useWorkspaces();
+  const { data: projects = [] } = useProjects(workspaceId);
+  const createProject = useCreateProject(workspaceId);
   const [sessionSearch, setSessionSearch] = useState("");
   const deferredSearch = useDeferredValue(sessionSearch);
   const { data: sessions = [] } = useChatSessions(workspaceId, deferredSearch);
@@ -110,6 +173,11 @@ export default function ChatPage() {
   const [model, setModel] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [projectMemoryMode, setProjectMemoryMode] = useState<"workspace" | "project">("workspace");
+  const [projectInstructions, setProjectInstructions] = useState("");
+  const [projectError, setProjectError] = useState<string | null>(null);
   const messageContainer = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInput = useRef<HTMLInputElement>(null);
@@ -159,6 +227,29 @@ export default function ChatPage() {
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [input]);
+
+  async function handleCreateProject() {
+    const name = projectName.trim();
+    if (!name) {
+      setProjectError("Project name is required.");
+      return;
+    }
+    setProjectError(null);
+    try {
+      const project = await createProject.mutateAsync({
+        name,
+        instructions: projectInstructions.trim(),
+        memory_mode: projectMemoryMode,
+      });
+      setProject(project.id);
+      setProjectName("");
+      setProjectInstructions("");
+      setProjectMemoryMode("workspace");
+      setProjectModalOpen(false);
+    } catch {
+      setProjectError("Could not create the project.");
+    }
+  }
 
   function handleNewChat() {
     reset();
@@ -349,6 +440,7 @@ export default function ChatPage() {
       model || null,
       attachments.map((attachment) => attachment.id),
       attachments,
+      currentProjectId,
     );
     setAttachments([]);
     setAttachmentError(null);
@@ -456,68 +548,80 @@ export default function ChatPage() {
           aria-label="Search chats"
         />
 
+        <Button
+          className={styles.newChat}
+          variant="secondary"
+          onClick={() => setProjectModalOpen(true)}
+        >
+          New project
+        </Button>
+
         <nav className={styles.sessionList} aria-label="Chat history">
           {sessions.length === 0 ? (
             <p className={styles.sessionEmpty}>
               {sessionSearch.trim() ? "No matching conversations." : "No conversations yet."}
             </p>
           ) : (
-            sessions.map((session) => (
-              <div
-                key={session.id}
-                className={`${styles.sessionRow} ${
-                  session.id === sessionId ? styles.sessionActive : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className={styles.sessionSelect}
-                  onClick={() => void openSession(session.id)}
-                >
-                  <span className={styles.sessionTitle}>{session.title}</span>
-                  <span className={styles.sessionMeta}>{session.message_count} messages</span>
-                </button>
-                <span className={styles.sessionActions}>
+            <>
+              {projects
+                .filter((project) => sessions.some((session) => session.project_id === project.id))
+                .map((project) => (
+                  <div key={project.id} className={styles.projectGroup}>
+                    <button
+                      type="button"
+                      className={`${styles.projectHeader} ${
+                        currentProjectId === project.id ? styles.projectActive : ""
+                      }`}
+                      onClick={() =>
+                        setProject(currentProjectId === project.id ? null : project.id)
+                      }
+                      title="New chats will be added to this project"
+                    >
+                      <span>{project.name}</span>
+                      <span className={styles.projectMode}>
+                        {project.memory_mode === "project" ? "project memory" : "workspace memory"}
+                      </span>
+                    </button>
+                    {sessions
+                      .filter((session) => session.project_id === project.id)
+                      .map((session) => (
+                        <SessionRow
+                          key={session.id}
+                          session={session}
+                          active={session.id === sessionId}
+                          onOpen={(id) => void openSession(id)}
+                          onRename={openRenameSession}
+                          onDelete={openDeleteSession}
+                        />
+                      ))}
+                  </div>
+                ))}
+              {sessions.some((session) => !session.project_id) ? (
+                <div className={styles.projectGroup}>
                   <button
                     type="button"
-                    className={styles.sessionAction}
-                    aria-label={`Rename ${session.title}`}
-                    onClick={() => openRenameSession(session)}
+                    className={`${styles.projectHeader} ${
+                      currentProjectId === null ? styles.projectActive : ""
+                    }`}
+                    onClick={() => setProject(null)}
                   >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
-                    </svg>
+                    <span>Workspace chats</span>
                   </button>
-                  <button
-                    type="button"
-                    className={styles.sessionAction}
-                    aria-label={`Delete ${session.title}`}
-                    onClick={() => openDeleteSession(session)}
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" />
-                    </svg>
-                  </button>
-                </span>
-              </div>
-            ))
+                  {sessions
+                    .filter((session) => !session.project_id)
+                    .map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        active={session.id === sessionId}
+                        onOpen={(id) => void openSession(id)}
+                        onRename={openRenameSession}
+                        onDelete={openDeleteSession}
+                      />
+                    ))}
+                </div>
+              ) : null}
+            </>
           )}
         </nav>
 
@@ -1021,6 +1125,57 @@ export default function ChatPage() {
           all of its messages.
         </p>
         {sessionActionError ? <p className={styles.error}>{sessionActionError}</p> : null}
+      </Modal>
+
+      <Modal
+        open={projectModalOpen}
+        onClose={() => setProjectModalOpen(false)}
+        title="New project"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setProjectModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button loading={createProject.isPending} onClick={() => void handleCreateProject()}>
+              Create
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.form}>
+          <label className={styles.field}>
+            <span>Name</span>
+            <input
+              className={styles.input}
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              maxLength={120}
+            />
+          </label>
+          <div className={styles.field}>
+            <span>Memory</span>
+            <Select
+              label="Memory"
+              value={projectMemoryMode}
+              onChange={(next) => setProjectMemoryMode(next as "workspace" | "project")}
+              options={[
+                { value: "workspace", label: "Workspace memory (global)" },
+                { value: "project", label: "Project memory only" },
+              ]}
+            />
+          </div>
+          <label className={styles.field}>
+            <span>Instructions (optional)</span>
+            <textarea
+              className={styles.input}
+              value={projectInstructions}
+              onChange={(event) => setProjectInstructions(event.target.value)}
+              rows={3}
+              maxLength={4000}
+            />
+          </label>
+          {projectError ? <p className={styles.error}>{projectError}</p> : null}
+        </div>
       </Modal>
     </div>
   );

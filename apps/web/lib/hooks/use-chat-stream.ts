@@ -108,6 +108,7 @@ export function useChatStream() {
       model: string | null = null,
       attachmentIds: string[] = [],
       attachments: ChatAttachment[] = [],
+      projectId: string | null = null,
     ) => {
       if (!content.trim() || isStreaming) {
         return;
@@ -130,6 +131,7 @@ export function useChatStream() {
             message: content,
             session_id: sessionId,
             workspace_id: workspaceId,
+            project_id: projectId,
             disabled_mcp_tools: disabledMcpTools,
             model,
             attachment_ids: attachmentIds,

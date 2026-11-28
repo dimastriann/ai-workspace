@@ -227,6 +227,7 @@ export interface ChatSessionSummary {
   id: string;
   title: string;
   workspace_id: string | null;
+  project_id: string | null;
   message_count: number;
   model: string | null;
   created_at: string;
@@ -247,4 +248,17 @@ export interface ChatAttachment {
   filename: string;
   size_bytes: number;
   characters: number;
+}
+
+export interface Project {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  memory_mode: "workspace" | "project";
+  session_count: number;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
 }
