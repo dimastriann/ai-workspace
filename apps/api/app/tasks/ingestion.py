@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import Document, DocumentChunk
 from app.services.chunking import chunk_text
 from app.services.parsing import extract_text
+from app.services.vector_service import vector_service
 
 
 async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
@@ -36,17 +37,17 @@ async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
         await db.execute(
             delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
         )
-        db.add_all(
-            [
-                DocumentChunk(
-                    document_id=document_id,
-                    workspace_id=workspace_id,
-                    ordinal=index,
-                    content=chunk,
-                )
-                for index, chunk in enumerate(chunks)
-            ]
-        )
+        rows = [
+            DocumentChunk(
+                document_id=document_id,
+                workspace_id=workspace_id,
+                ordinal=index,
+                content=chunk,
+            )
+            for index, chunk in enumerate(chunks)
+        ]
+        db.add_all(rows)
+        await db.flush()
 
         document.status = "completed"
         document.chunk_count = len(chunks)
@@ -58,3 +59,11 @@ async def process_document(db: AsyncSession, payload: dict[str, Any]) -> None:
             failed.status = "error"
             await db.commit()
         raise
+
+    # Semantic indexing is optional and must never fail ingestion.
+    await vector_service.index_chunks(
+        workspace_id,
+        document_id,
+        [(row.id, row.content) for row in rows],
+        db,
+    )

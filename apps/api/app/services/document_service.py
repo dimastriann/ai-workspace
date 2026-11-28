@@ -36,6 +36,7 @@ from app.services.storage import (
     remove_file,
     remove_tree,
 )
+from app.services.vector_service import vector_service
 
 
 class DocumentService:
@@ -133,6 +134,7 @@ class DocumentService:
 
         await asyncio.to_thread(remove_file, file_path)
         await asyncio.to_thread(remove_tree, artifacts)
+        await vector_service.remove_document(document_id)
         return document
 
 

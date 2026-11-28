@@ -1,8 +1,9 @@
 """
 AI Workspace API — Retrieval
 
-Lexical context retrieval backed by Postgres full-text search.
-Falls back to a simple match on non-Postgres databases (tests).
+Semantic retrieval backed by Qdrant when enabled, falling back to
+Postgres full-text search (and a simple match on non-Postgres databases
+for tests) whenever the vector path is unavailable.
 """
 
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import Document, DocumentChunk
+from app.services.vector_service import vector_service
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,59 @@ class RetrievalService:
         if not query.strip():
             return []
 
+        semantic = await self._semantic_search(query, workspace_id, db, limit)
+        if semantic is not None:
+            return semantic
+
+        return await self._lexical_search(query, workspace_id, db, limit)
+
+    async def _semantic_search(
+        self,
+        query: str,
+        workspace_id: UUID,
+        db: AsyncSession,
+        limit: int,
+    ) -> list[RetrievedChunk] | None:
+        """Vector search; None means fall back to lexical."""
+        if not await vector_service.enabled(db):
+            return None
+        hits = await vector_service.search(workspace_id, query, limit)
+        if hits is None:
+            return None
+        if not hits:
+            return []
+
+        statement = (
+            select(
+                DocumentChunk.id,
+                DocumentChunk.document_id,
+                DocumentChunk.ordinal,
+                DocumentChunk.content,
+                Document.filename,
+            )
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(DocumentChunk.id.in_([UUID(chunk_id) for chunk_id, _score in hits]))
+        )
+        rows = {str(row.id): row for row in (await db.execute(statement)).all()}
+        # Qdrant returns hits in relevance order; preserve it.
+        return [
+            RetrievedChunk(
+                document_id=str(row.document_id),
+                filename=row.filename,
+                ordinal=row.ordinal,
+                content=row.content,
+            )
+            for chunk_id, _score in hits
+            if (row := rows.get(chunk_id)) is not None
+        ]
+
+    async def _lexical_search(
+        self,
+        query: str,
+        workspace_id: UUID,
+        db: AsyncSession,
+        limit: int,
+    ) -> list[RetrievedChunk]:
         columns = (
             DocumentChunk.document_id,
             DocumentChunk.ordinal,

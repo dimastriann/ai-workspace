@@ -45,7 +45,11 @@ apps/web (Next.js 16)  ── BFF route handlers ──►  apps/api (FastAPI)
 
 ### Chat and retrieval
 1. Chat resolves or creates a session.
-2. Retrieval runs Postgres full-text search over `document_chunks` for the workspace.
+2. Retrieval is semantic-first when `features.vector_rag` is enabled: chunks embedded
+   at ingestion live in Qdrant (collection `document_chunks`, workspace-filtered) and
+   queries are answered by nearest-neighbor search. Any failure — feature off, Qdrant
+   unreachable, embedding provider down — falls back to Postgres full-text search over
+   `document_chunks`.
 3. Sources are streamed first, then LLM tokens.
 4. Messages are persisted after the response completes.
 
